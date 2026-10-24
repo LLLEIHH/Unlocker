@@ -4,7 +4,7 @@
 
 纯用户态实现，**不加载内核驱动**；权限按「动作」分配，而不是整个窗口一直以管理员身份运行。
 
-[![CI](https://github.com/LLLEIHH/unlocker/actions/workflows/build.yml/badge.svg)](https://github.com/LLLEIHH/unlocker/actions/workflows/build.yml)
+[![CI](https://github.com/LLLEIHH/Unlocker/actions/workflows/build.yml/badge.svg)](https://github.com/LLLEIHH/Unlocker/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20x64-lightgrey)
 
