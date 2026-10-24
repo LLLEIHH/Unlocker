@@ -38,7 +38,7 @@
         <Grid x:Name="TitleBarGrid" Grid.Row="0" VerticalAlignment="Stretch">
             <StackPanel Orientation="Horizontal" Spacing="10" Margin="14,0,0,0" VerticalAlignment="Center">
                 <Border Width="22" Height="22" CornerRadius="6" Background="{ThemeResource AccentFillColorDefaultBrush}">
-                    <FontIcon Glyph="&#xE72E;" FontSize="11" Foreground="White" />
+                    <FontIcon Glyph="&#xE785;" FontSize="11" Foreground="White" />
                 </Border>
                 <TextBlock Text="Unlocker" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
                 <TextBlock Text="文件占用解除工具" FontSize="12" VerticalAlignment="Center" Margin="4,1,0,0"
@@ -212,7 +212,7 @@
 
             <Button x:Name="UnlockButton" Grid.Column="0" ToolTipService.ToolTip="解锁选中项（不删除文件）">
                 <StackPanel Orientation="Horizontal" Spacing="7">
-                    <FontIcon Glyph="&#xE72E;" FontSize="14" />
+                    <FontIcon Glyph="&#xE785;" FontSize="14" />
                     <TextBlock x:Name="UnlockText" Text="解锁" Visibility="Collapsed" />
                 </StackPanel>
             </Button>
