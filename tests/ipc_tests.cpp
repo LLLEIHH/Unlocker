@@ -180,10 +180,14 @@ int wmain() {
             }
             const json::Value* results = result.Find("results");
             bool hasLocked = false;
+            std::wstring seen = L"(没拿到最终结果)";
             if (results && results->type == json::Value::Type::Array && !results->arr.empty()) {
+                seen = L"state=" + Utf8ToUtf16(results->arr[0].GetString("state"));
                 hasLocked = results->arr[0].GetString("state") == "locked";
+            } else if (gotFinal) {
+                seen = L"(results 数组为空)";
             }
-            Check(gotFinal && hasLocked, L"scan 返回 locked 状态");
+            Check(gotFinal && hasLocked, L"scan 返回 locked 状态", seen);
             Check(sawProgress || gotFinal, L"scan 有进度或最终结果");
 
             // worker 端重新裁决：删系统文件必须被 BL-001/003 挡下
