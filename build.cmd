@@ -10,17 +10,32 @@ set "https_proxy="
 set "ALL_PROXY="
 set "all_proxy="
 
-rem Locate Visual Studio 2022: try BuildTools, then Community, then vswhere probe
+rem Locate Visual Studio 2022: try BuildTools, then Community, then a vswhere probe.
+rem NOTE: %ProgramFiles(x86)% expands to a path containing a closing paren. Using it directly
+rem inside an if/for compound statement makes cmd close that statement early and abort with
+rem "\Microsoft was unexpected at this time" -- which only happens where neither hardcoded
+rem path exists (i.e. on CI runners, not on a dev box). Delayed expansion (!var!) is expanded
+rem after parsing, so it is safe there.
+setlocal EnableDelayedExpansion
 set "VSDIR=C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools"
 if not exist "%VSDIR%\VC\Tools\MSVC" set "VSDIR=C:\Program Files\Microsoft Visual Studio\2022\Community"
-if not exist "%VSDIR%\VC\Tools\MSVC" set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
-if not exist "%VSDIR%\VC\Tools\MSVC" if exist "%VSWHERE%" for /f "usebackq delims=" %%i in (`""%VSWHERE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath"`) do set "VSDIR=%%i"
-if not exist "%VSDIR%\VC\Tools\MSVC" (
-    echo [ERROR] No Visual Studio 2022 with MSVC v143 tools found.
-    echo         Install VS 2022 BuildTools or Community with the C++ workload first.
-    exit /b 1
-)
+if exist "%VSDIR%\VC\Tools\MSVC" goto have_vs
+
+set "VSWHERE=!ProgramFiles(x86)!\Microsoft Visual Studio\Installer\vswhere.exe"
+if not exist "!VSWHERE!" goto no_vs
+for /f "usebackq delims=" %%i in (`""!VSWHERE!" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath"`) do set "VSDIR=%%i"
+
+:have_vs
+if not exist "%VSDIR%\VC\Tools\MSVC" goto no_vs
 echo [info] VSDIR=%VSDIR%
+goto vs_ready
+
+:no_vs
+echo [ERROR] No Visual Studio 2022 with MSVC v143 tools found.
+echo         Install VS 2022 BuildTools or Community with the C++ workload first.
+exit /b 1
+
+:vs_ready
 set "XAMLDIR=%VSDIR%\MSBuild\Microsoft\WindowsXaml\v17.0"
 set "CMAKE=%VSDIR%\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
 if not exist "%CMAKE%" set "CMAKE=cmake"
