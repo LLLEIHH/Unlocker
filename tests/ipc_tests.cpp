@@ -182,12 +182,17 @@ int wmain() {
             bool hasLocked = false;
             std::wstring seen = L"(没拿到最终结果)";
             if (results && results->type == json::Value::Type::Array && !results->arr.empty()) {
-                seen = L"state=" + Utf8ToUtf16(results->arr[0].GetString("state"));
-                hasLocked = results->arr[0].GetString("state") == "locked";
+                // locked       = 找到持有进程
+                // lockedbykernel = 文件确实被锁着，但持有进程查不出来（句柄枚举权限不足 / 内核态持有）
+                // 后者是既定义行为（见 README「8 种占用状态」），CI 的非管理员环境常走这条路，
+                // 所以两者都算通过；真正的失败是 locked 之外的状态（比如 notfound）。
+                const std::wstring state = Utf8ToUtf16(results->arr[0].GetString("state"));
+                seen = L"state=" + state;
+                hasLocked = state == L"locked" || state == L"lockedbykernel";
             } else if (gotFinal) {
                 seen = L"(results 数组为空)";
             }
-            Check(gotFinal && hasLocked, L"scan 返回 locked 状态", seen);
+            Check(gotFinal && hasLocked, L"scan 返回 locked / lockedbykernel 状态", seen);
             Check(sawProgress || gotFinal, L"scan 有进度或最终结果");
 
             // worker 端重新裁决：删系统文件必须被 BL-001/003 挡下
