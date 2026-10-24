@@ -1,0 +1,16 @@
+// WinUI 3 C++ projects require an IDL: the XAML-generated AppT/MainWindowT
+// derive from a <Class>_base produced by C++/WinRT from this winmd.
+namespace Unlocker
+{
+    [default_interface]
+    runtimeclass App : Microsoft.UI.Xaml.Application, Microsoft.UI.Xaml.Markup.IXamlMetadataProvider
+    {
+        App();
+    }
+
+    [default_interface]
+    runtimeclass MainWindow : Microsoft.UI.Xaml.Window
+    {
+        MainWindow();
+    }
+}

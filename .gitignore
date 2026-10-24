@@ -1,0 +1,27 @@
+# ---------------------------------------------------------------- 构建产物
+# CMake / MSBuild 中间件与输出目录，全部可再生
+/build/
+/build.bak-lei-cache/
+/winui/build-winui/
+/winui/build-winui.bak-lei/
+
+# ---------------------------------------------------------------- 依赖还原
+# build.cmd winui 会用 tools/nuget/nuget.exe 重新还原（4 个包共 ~430 MB）
+/winui/packages/
+
+# ---------------------------------------------------------------- 本机状态
+.vs/
+/out/
+CMakeUserPresets.json
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
+*.tlog
+*.log
+
+# 开发期截图 / 临时产物（screencap.py 的输出）
+/ui-shot*.png
+
+# Agent 工作区数据（记忆、会话缓存），不属于源码
+/.workbuddy/

@@ -1,0 +1,31 @@
+// 资源脚本：只放版本信息。manifest 走链接器（CMake 把 app.manifest 作为 ManifestInput）。
+#include <winver.h>
+#include <windows.h>
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     0,8,0,0
+PRODUCTVERSION  0,8,0,0
+FILEFLAGSMASK   0x3fL
+FILEFLAGS       0x0L
+FILEOS          0x40004L
+FILETYPE        0x1L
+FILESUBTYPE     0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "080404B0"
+        BEGIN
+            VALUE "FileDescription",  "Unlocker - 文件占用解锁工具\0"
+            VALUE "FileVersion",      "0.8.0.0\0"
+            VALUE "InternalName",     "Unlocker\0"
+            VALUE "OriginalFilename", "Unlocker.exe\0"
+            VALUE "ProductName",      "Unlocker\0"
+            VALUE "ProductVersion",   "0.8.0.0\0"
+            VALUE "Comments",         "纯用户态实现，不加载内核驱动\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0804, 1200
+    END
+END

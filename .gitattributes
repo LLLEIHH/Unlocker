@@ -1,0 +1,15 @@
+# 仓库里统一存 LF，工作区按下面的规则还原
+* text=auto
+
+# 批处理必须是 CRLF：LF 的 .cmd 在 cmd.exe 下解析会出错（chcp 65001 时还会吃字节）
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# 二进制，不做任何换行/编码处理
+*.exe  binary
+*.dll  binary
+*.lib  binary
+*.pri  binary
+*.xbf  binary
+*.ico  binary
+*.png  binary

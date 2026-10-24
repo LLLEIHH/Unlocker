@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{A1B2C3D4-1111-4222-8333-944455556666}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>Unlocker</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+    <ProjectName>UnlockerApp</ProjectName>
+    <NuGetPackageRoot>$(MSBuildThisFileDirectory)packages\</NuGetPackageRoot>
+    <!-- 包内 props 会把 CppWinRTPath 写成带引号且以 \ 结尾的形式，
+         cmd 会把 \" 当转义，导致 cppwinrt 命令 9009。这里显式指向 bin 目录（本路径无空格）。 -->
+    <CppWinRTPath>$(MSBuildThisFileDirectory)packages\Microsoft.Windows.CppWinRT.3.0.260818.1\bin\</CppWinRTPath>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries>
+    <UseDebugLibraries Condition="'$(Configuration)'=='Release'">false</UseDebugLibraries>
+    <WholeProgramOptimization Condition="'$(Configuration)'=='Release'">true</WholeProgramOptimization>
+    <!-- WinUI 3 关键开关：unpackaged + 自包含，避免依赖 WindowsAppRuntime 安装包 -->
+    <AppxPackage>false</AppxPackage>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <UseWinUI>true</UseWinUI>
+    <CppWinRTEnabled>true</CppWinRTEnabled>
+    <EnableMsixTooling>false</EnableMsixTooling>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+
+  <ImportGroup Label="ExtensionSettings">
+    <Import Project="packages\Microsoft.Windows.CppWinRT.3.0.260818.1\build\native\Microsoft.Windows.CppWinRT.props" Condition="Exists('packages\Microsoft.Windows.CppWinRT.3.0.260818.1\build\native\Microsoft.Windows.CppWinRT.props')" />
+    <Import Project="packages\Microsoft.WindowsAppSDK.1.7.251107005\build\native\Microsoft.WindowsAppSDK.props" Condition="Exists('packages\Microsoft.WindowsAppSDK.1.7.251107005\build\native\Microsoft.WindowsAppSDK.props')" />
+    <Import Project="packages\Microsoft.Windows.SDK.BuildTools.10.0.22621.756\build\Microsoft.Windows.SDK.BuildTools.props" Condition="Exists('packages\Microsoft.Windows.SDK.BuildTools.10.0.22621.756\build\Microsoft.Windows.SDK.BuildTools.props')" />
+  </ImportGroup>
+
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+
+  <PropertyGroup>
+    <OutDir>$(SolutionDir)build-winui\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)build-winui\obj\$(Platform)\$(Configuration)\</IntDir>
+    <TargetName>Unlocker</TargetName>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalOptions>/utf-8 /Zc:__cplusplus /permissive- %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)..\src;$(ProjectDir)..\build\generated;$(IntDir).;$(IntDir)Generated Files;$(IntDir)Generated Files\winrt;$(ProjectDir)Generated Files;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>UNICODE;_UNICODE;WIN32_LEAN_AND_MEAN;NOMINMAX;_WIN32_WINNT=0x0A00;WINVER=0x0A00;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel>Level4</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalLibraryDirectories>$(ProjectDir)..\build\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>unlocker_core.lib;dwmapi.lib;version.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Manifest>
+      <EnableDpiAwareness>false</EnableDpiAwareness>
+    </Manifest>
+  </ItemDefinitionGroup>
+
+  <ItemGroup>
+    <ClInclude Include="pch.h" />
+    <ClInclude Include="App.xaml.h" />
+    <ClInclude Include="MainWindow.xaml.h" />
+    <ClInclude Include="XamlTypeLookup.h" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ClCompile Include="pch.cpp">
+      <PrecompiledHeader>Create</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="XamlTypeInfoGlue.cpp" />
+    <ClCompile Include="App.xaml.cpp" />
+    <ClCompile Include="MainWindow.xaml.cpp" />
+    <ClCompile Include="..\src\ui\UiIpc.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\src\ui\FilePicker.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\src\cli\CliMain.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="..\src\ui\ElevationCheck.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Midl Include="UnlockerApp.idl" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Page Include="App.xaml" />
+    <Page Include="MainWindow.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Manifest Include="app.manifest" />
+  </ItemGroup>
+
+  <!-- WindowsAppSDK 的 winmd 里引用了 WebView2 的类型，cppwinrt 生成投影时必须同时看到这个 winmd，
+       否则报 Type 'Microsoft.Web.WebView2.Core.CoreWebView2' could not be found -->
+  <ItemGroup>
+    <Reference Include="Microsoft.Web.WebView2.Core">
+      <HintPath>packages\Microsoft.Web.WebView2.1.0.2903.40\lib\Microsoft.Web.WebView2.Core.winmd</HintPath>
+      <IsWinMDFile>true</IsWinMDFile>
+    </Reference>
+  </ItemGroup>
+
+  <!-- 本机没有 VS 的 UWP 工作负载，XAML 编译器拿不到 ReferencePath（报 WMC1007），
+       这里手动把 WinUI 的 winmd 喂给它 -->
+  <ItemGroup>
+    <ReferencePath Include="packages\Microsoft.WindowsAppSDK.1.7.251107005\lib\uap10.0\*.winmd" />
+    <ReferencePath Include="packages\Microsoft.WindowsAppSDK.1.7.251107005\lib\uap10.0.18362\*.winmd" />
+    <ReferencePath Include="packages\Microsoft.Web.WebView2.1.0.2903.40\lib\Microsoft.Web.WebView2.Core.winmd" />
+    <!-- Windows SDK 的契约 winmd（FoundationContract 等），正常由 UWP 目标平台解析提供 -->
+    <ReferencePath Include="$(WindowsSdkDir)References\$(WindowsTargetPlatformVersion)\**\*.winmd" />
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="packages\Microsoft.Windows.CppWinRT.3.0.260818.1\build\native\Microsoft.Windows.CppWinRT.targets" Condition="Exists('packages\Microsoft.Windows.CppWinRT.3.0.260818.1\build\native\Microsoft.Windows.CppWinRT.targets')" />
+    <Import Project="packages\Microsoft.WindowsAppSDK.1.7.251107005\build\native\Microsoft.WindowsAppSDK.targets" Condition="Exists('packages\Microsoft.WindowsAppSDK.1.7.251107005\build\native\Microsoft.WindowsAppSDK.targets')" />
+    <Import Project="packages\Microsoft.Windows.SDK.BuildTools.10.0.22621.756\build\Microsoft.Windows.SDK.BuildTools.targets" Condition="Exists('packages\Microsoft.Windows.SDK.BuildTools.10.0.22621.756\build\Microsoft.Windows.SDK.BuildTools.targets')" />
+  </ImportGroup>
+
+  <!--
+    VS 的 C++ XAML 胶水（Microsoft.Windows.UI.Xaml.Cpp.targets）在 BuildTools 里没有，
+    但它只做三件很简单的事：把 MarkupCompilePass1/2 挂到编译流程上、把生成的 .cpp 加进编译、
+    把生成目录加进 include 路径。这里用最小实现补上，XAML 编译器本身来自 WindowsAppSDK 包。
+  -->
+  <Target Name="XamlGluePass1" BeforeTargets="ClCompile" DependsOnTargets="MarkupCompilePass1" />
+
+  <Target Name="XamlGlueInject" BeforeTargets="ClCompile" AfterTargets="XamlGluePass1">
+    <!-- _GeneratedCodeFiles 里有重复项（同一 .g.cpp 出现两次），直接加会并发编译同一文件，
+         报 “XamlLibMetadataProvider.g.obj: Permission denied”，所以先去重 -->
+    <RemoveDuplicates Inputs="@(_GeneratedCodeFiles)">
+      <Output TaskParameter="Filtered" ItemName="_XamlGeneratedCppAll" />
+    </RemoveDuplicates>
+    <ItemGroup>
+      <ClCompile Include="@(_XamlGeneratedCppAll)" Condition="'%(Extension)' == '.cpp'" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="XamlGluePass2" BeforeTargets="ClCompile" DependsOnTargets="MarkupCompilePass1;MarkupCompilePass2" />
+  <!-- VS 的 Appx 打包任务（Microsoft.Build.AppxPackage.dll）在 BuildTools 里没有；
+       这里用等价的最小实现覆盖 CopyLocalFilesOutputGroup，去掉它只是为了去重，
+       直接透传即可，不影响自包含部署的文件拷贝。 -->
+  <!-- PriGen 关掉后，通用目标里仍会引用它；空实现即可 -->
+  <Target Name="AddProcessedXamlFilesToCopyLocal" />
+
+  <Target Name="CopyLocalFilesOutputGroup" Returns="@(CopyLocalFilesOutputGroupOutput)">
+    <ItemGroup>
+      <CopyLocalFilesOutputGroupOutput Include="@(ReferenceCopyLocalPaths)" />
+    </ItemGroup>
+  </Target>
+
+  <!--
+    PriGen 产出的 PRI 名字是 $(TargetName).pri（=Unlocker.pri），但 MRT 运行时（MRM.dll）
+    在 unpackaged 场景下只按 **resources.pri** 这个名字找应用资源库。
+    这里在构建后固定落一份同名副本，避免“每台机器手工复制一次、重建就丢”的老坑。
+  -->
+  <Target Name="UnlockerResourcesPri" AfterTargets="Build" Condition="Exists('$(OutDir)$(TargetName).pri')">
+    <Copy SourceFiles="$(OutDir)$(TargetName).pri" DestinationFiles="$(OutDir)resources.pri" />
+  </Target>
+
+</Project>

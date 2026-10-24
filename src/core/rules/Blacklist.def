@@ -1,0 +1,108 @@
+// 内置黑名单单一数据源（X-Macro）。新增规则只改这个文件，枚举/表/日志字符串自动同步。
+//
+// 参数：规则ID, 匹配类型, 模式, 裁决, 严重度, 原因
+// 占位符（启动时用 API 展开，不写死盘符）：
+//   <Windows>          GetWindowsDirectoryW
+//   <ProgramFiles>     FOLDERID_ProgramFiles
+//   <ProgramFilesX86>  FOLDERID_ProgramFilesX86
+//   <AnyVolumeRoot>    运行期逐卷展开（BL-008 / BL-009，静态模式写不出来）
+//
+// 重要：所有模式必须以占位符或盘符开头。裸的 System32\... 归一化后永远匹配不上全路径，
+// 规则会静默失效 —— 这类错误不报错、不崩溃，只会让保护悄悄消失（v0.8 修复点）。
+
+// ---------------- 规则 ID（唯一，枚举来源） ----------------
+BL_RULE_ID(BL_001)
+BL_RULE_ID(BL_002)
+BL_RULE_ID(BL_003)
+BL_RULE_ID(BL_004)
+BL_RULE_ID(BL_005)
+BL_RULE_ID(BL_006)
+BL_RULE_ID(BL_007)
+BL_RULE_ID(BL_008)
+BL_RULE_ID(BL_009)
+BL_RULE_ID(BL_010)
+BL_RULE_ID(BL_011)
+BL_RULE_ID(BL_012)
+BL_RULE_ID(BL_013)
+BL_RULE_ID(BL_014)
+BL_RULE_ID(BL_015)
+BL_RULE_ID(BL_016)
+BL_RULE_ID(BL_017)
+BL_RULE_ID(BL_018)
+BL_RULE_ID(BL_019)
+BL_RULE_ID(BL_020)
+BL_RULE_ID(BL_030)
+BL_RULE_ID(BL_031)
+BL_RULE_ID(BL_032)
+
+// ---------------- 匹配行 ----------------
+// 驱动目录：关闭驱动文件句柄可能导致蓝屏
+BL_RULE(BL_001, MATCH_PREFIX, LR"(<Windows>\System32\drivers\)", DENY, CRIT, "驱动目录：关闭驱动文件句柄可能导致系统蓝屏或驱动异常")
+BL_RULE(BL_002, MATCH_PREFIX, LR"(<Windows>\System32\config\)", DENY, CRIT, "注册表 hive 目录：删除或改写会导致系统无法启动")
+// 内核主文件
+BL_RULE(BL_003, MATCH_EXACT, LR"(<Windows>\System32\ntoskrnl.exe)", DENY, CRIT, "Windows 内核主文件")
+BL_RULE(BL_003, MATCH_EXACT, LR"(<Windows>\System32\ntkrnlmp.exe)", DENY, CRIT, "Windows 内核主文件")
+BL_RULE(BL_003, MATCH_EXACT, LR"(<Windows>\System32\ntkrnlpa.exe)", DENY, CRIT, "Windows 内核主文件")
+BL_RULE(BL_003, MATCH_EXACT, LR"(<Windows>\System32\ntoskrnlmp.exe)", DENY, CRIT, "Windows 内核主文件")
+// 硬件抽象层与代码完整性
+BL_RULE(BL_004, MATCH_EXACT, LR"(<Windows>\System32\hal.dll)", DENY, CRIT, "硬件抽象层，删除后系统无法启动")
+BL_RULE(BL_004, MATCH_EXACT, LR"(<Windows>\System32\ci.dll)", DENY, CRIT, "代码完整性模块")
+BL_RULE(BL_004, MATCH_EXACT, LR"(<Windows>\System32\bootvid.dll)", DENY, CRIT, "启动图形驱动")
+// 内核图形子系统
+BL_RULE(BL_005, MATCH_GLOB, LR"(<Windows>\System32\win32k*.sys)", DENY, CRIT, "内核图形子系统驱动")
+// 其余内核模块（System32 根目录下的 .sys）
+BL_RULE(BL_006, MATCH_GLOB, LR"(<Windows>\System32\*.sys)", DENY, CRIT, "内核驱动模块：关闭其句柄或删除可能导致蓝屏")
+// 整卷操作不是本工具职责
+BL_RULE(BL_007, MATCH_VOLUME_ROOT, LR"(*)", DENY, CRIT, "卷根目录：本工具不提供整卷操作")
+// 内存/休眠文件
+BL_RULE(BL_008, MATCH_EXACT, LR"(<AnyVolumeRoot>\pagefile.sys)", DENY, CRIT, "分页文件，由内核独占使用")
+BL_RULE(BL_008, MATCH_EXACT, LR"(<AnyVolumeRoot>\hiberfil.sys)", DENY, CRIT, "休眠文件，由内核独占使用")
+BL_RULE(BL_008, MATCH_EXACT, LR"(<AnyVolumeRoot>\swapfile.sys)", DENY, CRIT, "交换文件，由内核独占使用")
+BL_RULE(BL_008, MATCH_EXACT, LR"(<AnyVolumeRoot>\DumpStack.log.tmp)", DENY, CRIT, "内存转储日志")
+// 引导链
+BL_RULE(BL_009, MATCH_EXACT, LR"(<AnyVolumeRoot>\bootmgr)", DENY, CRIT, "引导管理器")
+BL_RULE(BL_009, MATCH_EXACT, LR"(<AnyVolumeRoot>\BOOTNXT)", DENY, CRIT, "引导链文件")
+BL_RULE(BL_009, MATCH_EXACT, LR"(<AnyVolumeRoot>\Boot\BCD)", DENY, CRIT, "启动配置数据")
+// 组件存储与服务栈
+BL_RULE(BL_010, MATCH_PREFIX, LR"(<Windows>\WinSxS\)", DENY, CRIT, "组件存储目录：删除后系统无法安装补丁或修复")
+BL_RULE(BL_011, MATCH_PREFIX, LR"(<Windows>\servicing\)", DENY, CRIT, "服务栈目录：系统更新依赖")
+// 卷影/还原点
+BL_RULE(BL_012, MATCH_PREFIX, LR"(\System Volume Information\)", DENY, CRIT, "卷影副本与还原点数据")
+// 硬链接伪装（FILE_ID 表，见 PolicyGuard::Init）
+BL_RULE(BL_013, MATCH_FILE_ID, LR"(*)", DENY, CRIT, "该文件与受保护文件是同一个文件（硬链接），路径不同也按受保护处理")
+// 自杀保护
+BL_RULE(BL_014, MATCH_SELF, LR"(*)", DENY, CRIT, "这是本程序自身或其所在目录")
+// EFI 系统分区 / 系统保留分区
+BL_RULE(BL_015, MATCH_VOLUME, LR"(*)", DENY, CRIT, "EFI 系统分区或系统保留分区，不允许操作")
+// 系统目录其余部分
+BL_RULE(BL_016, MATCH_PREFIX, LR"(<Windows>\)", CONFIRM, HIGH, "系统目录下的文件，请确认不是系统自身需要的")
+// 已安装程序目录
+BL_RULE(BL_017, MATCH_PREFIX, LR"(<ProgramFiles>\)", CONFIRM, HIGH, "已安装程序目录，删除可能破坏软件安装")
+BL_RULE(BL_017, MATCH_PREFIX, LR"(<ProgramFilesX86>\)", CONFIRM, HIGH, "已安装程序目录，删除可能破坏软件安装")
+// 批量误删风险（只在批量入口做一次前置检查）
+BL_RULE(BL_018, MATCH_COUNT, LR"(*)", CONFIRM, HIGH, "本次批量操作对象超过 500 个，请确认不是误拖了整个目录")
+// 32 位子系统
+BL_RULE(BL_019, MATCH_PREFIX, LR"(<Windows>\SysWOW64\)", DENY, CRIT, "32 位子系统目录：删除后所有 32 位程序失效")
+// 根目录核心 DLL，删掉任一个都进不了桌面
+BL_RULE(BL_020, MATCH_EXACT, LR"(<Windows>\System32\ntdll.dll)", DENY, CRIT, "核心系统 DLL，删除后系统无法启动")
+BL_RULE(BL_020, MATCH_EXACT, LR"(<Windows>\System32\kernel32.dll)", DENY, CRIT, "核心系统 DLL，删除后系统无法启动")
+BL_RULE(BL_020, MATCH_EXACT, LR"(<Windows>\System32\kernelbase.dll)", DENY, CRIT, "核心系统 DLL，删除后系统无法启动")
+BL_RULE(BL_020, MATCH_EXACT, LR"(<Windows>\System32\user32.dll)", DENY, CRIT, "核心系统 DLL，删除后无法进入桌面")
+BL_RULE(BL_020, MATCH_EXACT, LR"(<Windows>\System32\win32u.dll)", DENY, CRIT, "核心系统 DLL，删除后无法进入桌面")
+BL_RULE(BL_020, MATCH_EXACT, LR"(<Windows>\System32\gdi32.dll)", DENY, CRIT, "核心系统 DLL，删除后无法进入桌面")
+BL_RULE(BL_020, MATCH_EXACT, LR"(<Windows>\System32\advapi32.dll)", DENY, CRIT, "核心系统 DLL，删除后系统无法启动")
+BL_RULE(BL_020, MATCH_EXACT, LR"(<Windows>\System32\rpcrt4.dll)", DENY, CRIT, "核心系统 DLL，删除后系统无法启动")
+BL_RULE(BL_020, MATCH_EXACT, LR"(<Windows>\System32\combase.dll)", DENY, CRIT, "核心系统 DLL，删除后系统无法启动")
+BL_RULE(BL_020, MATCH_EXACT, LR"(<Windows>\System32\ucrtbase.dll)", DENY, CRIT, "核心系统 DLL，删除后大量程序无法运行")
+BL_RULE(BL_020, MATCH_EXACT, LR"(<Windows>\System32\msvcrt.dll)", DENY, CRIT, "核心系统 DLL，删除后大量程序无法运行")
+BL_RULE(BL_020, MATCH_EXACT, LR"(<Windows>\System32\shell32.dll)", DENY, CRIT, "核心系统 DLL，删除后无法进入桌面")
+BL_RULE(BL_020, MATCH_EXACT, LR"(<Windows>\System32\ole32.dll)", DENY, CRIT, "核心系统 DLL，删除后无法进入桌面")
+BL_RULE(BL_020, MATCH_EXACT, LR"(<Windows>\System32\bcrypt.dll)", DENY, CRIT, "核心系统 DLL，删除后系统无法启动")
+BL_RULE(BL_020, MATCH_EXACT, LR"(<Windows>\System32\crypt32.dll)", DENY, CRIT, "核心系统 DLL，删除后系统无法启动")
+BL_RULE(BL_020, MATCH_EXACT, LR"(<Windows>\System32\sechost.dll)", DENY, CRIT, "核心系统 DLL，删除后系统无法启动")
+
+// ---------------- 显式放行（防止过严误伤） ----------------
+// 注意：Allow 规则优先于「通用 Confirm」但绝不能覆盖任何 Deny（见 PolicyGuard::Evaluate）
+BL_RULE(BL_030, MATCH_PREFIX, LR"(<Windows>\Temp\)", ALLOW, INFO, "系统临时目录，本身就是可清理内容")
+BL_RULE(BL_031, MATCH_PREFIX, LR"(<Windows>\SoftwareDistribution\Download\)", ALLOW, INFO, "更新缓存目录，常见占用场景")
+BL_RULE(BL_032, MATCH_PREFIX, LR"(<Windows>\Prefetch\)", ALLOW, INFO, "预读文件目录")
