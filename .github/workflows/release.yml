@@ -14,11 +14,11 @@ jobs:
     name: 构建单文件版
     runs-on: windows-latest
     env:
-      # 沙箱/CI 上常带重复代理变量，会让 MSBuild 直接 MSB6001
+      # 沙箱/CI 上常带重复代理变量，会让 MSBuild 直接 MSB6001。
+      # 注意：env 名在 GitHub 里**不区分大小写**，不能再写一份 http_proxy / https_proxy
+      # —— 会被判成重复定义、整个工作流直接判无效（"failed to parse workflow"）。
       HTTP_PROXY: ''
       HTTPS_PROXY: ''
-      http_proxy: ''
-      https_proxy: ''
 
     steps:
       - uses: actions/checkout@v4
