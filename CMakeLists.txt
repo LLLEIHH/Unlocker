@@ -23,6 +23,9 @@ add_compile_definitions(
     WINVER=0x0A00
 )
 
+# rc.exe 靠 include 路径找 Resource.rc 里引用的 unlocker.ico（工具生成，见 tools/make_icon.py）
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/assets/icons")
+
 add_compile_options(/utf-8 /W4 /permissive- /Zc:__cplusplus /EHsc)
 add_compile_options($<$<CONFIG:Release>:/O2>)
 

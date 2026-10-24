@@ -125,6 +125,13 @@
     <Manifest Include="app.manifest" />
   </ItemGroup>
 
+  <!-- 图标 + 版本信息。ico 在 ..\assets\icons，靠 AdditionalIncludeDirectories 让 rc.exe 找得到 -->
+  <ItemGroup>
+    <ResourceCompile Include="UnlockerApp.rc">
+      <AdditionalIncludeDirectories>$(ProjectDir)..\assets\icons;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemGroup>
+
   <!-- WindowsAppSDK 的 winmd 里引用了 WebView2 的类型，cppwinrt 生成投影时必须同时看到这个 winmd，
        否则报 Type 'Microsoft.Web.WebView2.Core.CoreWebView2' could not be found -->
   <ItemGroup>

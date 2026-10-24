@@ -209,3 +209,36 @@ build.cmd winui
 
 `.gitattributes` 里 **`*.cmd` / `*.bat` 强制 `eol=crlf`**：LF 的批处理在 cmd.exe 下会解析出错
 （`chcp 65001` 时还会吃中文字节）。仓库内统一存 LF，工作区按规则还原成 CRLF。
+
+## 九、应用图标
+
+图标不是手绘的位图，而是**几何定义 → 一次生成全部尺寸**：
+
+```
+assets/icons/unlock-a4.svg     # 设计稿（矢量，可编辑）
+assets/icons/unlocker.ico      # 成品：16/24/32/48/64/128/256 七档
+tools/make_icon.py             # 生成器（纯 Python，无 Pillow/ImageMagick 依赖）
+```
+
+改图形只需要改 `tools/make_icon.py` 里的 `VARIANTS` 几何常量，然后：
+
+```bat
+python tools\make_icon.py --variant a4 --ico assets\icons\unlocker.ico --svg assets\icons\unlock-a4.svg
+python tools\make_icon.py --sheet preview.png        :: 三方案对照图
+```
+
+设计空间固定 256×256：圆角方块 8..248（r=56）、锁体 72..184 × 114..206、
+锁梁弧心与锁体主轴都在 x=128（早期版本锁梁整体偏右 14 单位，看起来是歪的，已修）。
+
+两个 exe 都通过各自的资源脚本引用它：
+
+| 前端 | 资源脚本 | 说明 |
+| --- | --- | --- |
+| WinUI 3 | `winui/UnlockerApp.rc` | 图标 + 版本信息；rc.exe 靠 `AdditionalIncludeDirectories` 找 ico |
+| Win32 | `src/ui/Resource.rc` | 同上；ico 路径由 `CMakeLists.txt` 的 `include_directories` 提供 |
+
+资源 ID 用数字 `101`（`#define IDI_APPICON 101`），不用字符串名 —— 字符串名虽然也能编译，
+但 shell 取图标是按序号落的，用名字容易出现「资源在、任务栏却没图标」。
+
+校验方式（不依赖任何额外工具）：`FindResourceW(exe, 101, RT_GROUP_ICON)` 非空，
+或 `ExtractIconExW` 取第 0 个图标能画出来。

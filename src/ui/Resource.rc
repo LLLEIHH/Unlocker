@@ -1,6 +1,10 @@
-// 资源脚本：只放版本信息。manifest 走链接器（CMake 把 app.manifest 作为 ManifestInput）。
+// 资源脚本：应用图标 + 版本信息。manifest 走链接器（CMake 把 app.manifest 作为 ManifestInput）。
+// 图标由 tools/make_icon.py 生成，rc 通过 /I assets/icons 找到它（见 CMakeLists.txt）。
 #include <winver.h>
 #include <windows.h>
+
+#define IDI_APPICON 101
+IDI_APPICON ICON "unlocker.ico"
 
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION     0,8,0,0

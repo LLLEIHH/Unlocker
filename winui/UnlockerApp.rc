@@ -1,0 +1,36 @@
+// WinUI 版 exe 的资源脚本：应用图标 + 版本信息。
+// 图标文件在 assets/icons/unlocker.ico，由 tools/make_icon.py 从几何定义生成
+// （多尺寸 16/24/32/48/64/128/256，改图形后重跑一行命令即可，别手工画）。
+#include <winver.h>
+#include <windows.h>
+
+#define IDI_APPICON 101
+IDI_APPICON ICON "unlocker.ico"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     0,8,0,0
+PRODUCTVERSION  0,8,0,0
+FILEFLAGSMASK 0x3fL
+FILEFLAGS 0x0L
+FILEOS 0x40004L
+FILETYPE 0x1L
+FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "080404B0"
+        BEGIN
+            VALUE "FileDescription",  "Unlocker - 文件占用解锁工具\0"
+            VALUE "FileVersion",      "0.8.0.0\0"
+            VALUE "InternalName",     "Unlocker\0"
+            VALUE "OriginalFilename", "Unlocker.exe\0"
+            VALUE "ProductName",      "Unlocker\0"
+            VALUE "ProductVersion",   "0.8.0.0\0"
+            VALUE "Comments",         "WinUI 3 前端；纯用户态实现，不加载内核驱动\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0804, 1200
+    END
+END

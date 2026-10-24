@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Unlocker icon a2">
+  <!-- 全开：锁梁整体抬起，与锁体脱开 -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#1D4ED8"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#bg)"/>
+  <path d="M154.00 75.00 A26.0 26.0 0 0 0 102.00 75.00" fill="none" stroke="#FFFFFF" stroke-width="18.0" stroke-linecap="round"/>
+  <line x1="102.0" y1="75.0" x2="102.0" y2="96.0" stroke="#FFFFFF" stroke-width="18.0" stroke-linecap="round"/>
+  <line x1="154.0" y1="75.0" x2="154.0" y2="96.0" stroke="#FFFFFF" stroke-width="18.0" stroke-linecap="round"/>
+  <rect x="72.0" y="124.0" width="112.0" height="92.0" rx="18.0" fill="#FFFFFF"/>
+  <circle cx="128.0" cy="158.0" r="12.0" fill="url(#bg)"/>
+  <path d="M121 166 L135 166 L140 196 L116 196 Z" fill="url(#bg)"/>
+</svg>
