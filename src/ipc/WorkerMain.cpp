@@ -29,12 +29,13 @@ int WorkerMain(int argc, wchar_t** argv) {
     WorkerContext ctx;
     for (int i = 1; i < argc; ++i) {
         const std::wstring arg = argv[i];
-        if (std::wstring v = ArgValue(arg, L"--pipe"); !v.empty()) {
-            ctx.pipeName = v;
-        } else if (std::wstring v = ArgValue(arg, L"--parent-pid"); !v.empty()) {
-            ctx.expectedUiPid = static_cast<DWORD>(_wtoi(v.c_str()));
-        } else if (std::wstring v = ArgValue(arg, L"--ui-sid"); !v.empty()) {
-            ctx.uiUserSid = v;
+        // 三个分支各用独立变量名：同一作用域链里重复声明同名变量会触发 C4456
+        if (const std::wstring pipeArg = ArgValue(arg, L"--pipe"); !pipeArg.empty()) {
+            ctx.pipeName = pipeArg;
+        } else if (const std::wstring pidArg = ArgValue(arg, L"--parent-pid"); !pidArg.empty()) {
+            ctx.expectedUiPid = static_cast<DWORD>(_wtoi(pidArg.c_str()));
+        } else if (const std::wstring sidArg = ArgValue(arg, L"--ui-sid"); !sidArg.empty()) {
+            ctx.uiUserSid = sidArg;
         } else if (arg == L"--quiet") {
             ctx.quiet = true;
         }

@@ -235,7 +235,6 @@ int wmain() {
             Recv(srv.client, &ack);
 
             const uint32_t huge = 0xFFFFFFFF;
-            DWORD wrote = 0;
             OVERLAPPED ov{};
             ov.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
             WriteFile(srv.client, &huge, 4, nullptr, &ov);
