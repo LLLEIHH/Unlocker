@@ -35,6 +35,8 @@ python tools\check-winui-output.py winui\build-winui\x64\Release
 5. 文案一律走 `ul::T(L"中文", L"English")` / `ul::Tf(...)`，不要直接写裸字符串
 6. 新增文件要同时加到 `CMakeLists.txt`；WinUI 侧还要加到 `winui/UnlockerApp.vcxproj`
 7. 批处理文件保持 CRLF（`.gitattributes` 已钉死）
+8. `winui/` 下这几个是**构建产物**，不要提交：`UnlockerApp_h.h`、`XamlMetaDataProvider{_h.h,.cpp,.idl}`
+   —— MIDL 与 XAML 编译器把产物写在 `.idl` 旁边（不在 `obj/`），每次构建自动重新生成
 
 ## 提交
 

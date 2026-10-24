@@ -11,6 +11,14 @@
 # nuget.exe 是 8 MB 二进制，由 build.cmd 按需下载，不进仓库
 /tools/nuget/nuget.exe
 
+# ---------------------------------------------------------------- 生成到源码目录的中间产物
+# MIDL 与 XAML 编译器把 IDL/元数据代理的产物写在 .idl 旁边（不是 obj 目录），
+# 每次 build.cmd winui 都会重新生成；早期误提交过一份旧工具链的残留，已移出仓库。
+/winui/UnlockerApp_h.h
+/winui/XamlMetaDataProvider_h.h
+/winui/XamlMetaDataProvider.cpp
+/winui/XamlMetaDataProvider.idl
+
 # ---------------------------------------------------------------- 本机状态
 .vs/
 /out/
@@ -27,3 +35,7 @@ CMakeUserPresets.json
 
 # Agent 工作区数据（记忆、会话缓存），不属于源码
 /.workbuddy/
+
+# 内部过程文档（执行方案 / 评审记录 / 施工单 / 任务状态）。
+# 是对内的施工笔记，不随仓库发布；要公开哪一份请显式 git add -f。
+/notes/
