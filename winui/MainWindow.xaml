@@ -210,10 +210,29 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <Button x:Name="UnlockButton" Grid.Column="0" ToolTipService.ToolTip="解锁选中项（不删除文件）">
+            <!--
+                主操作按钮：品牌蓝 #2176BC 实底 + 白色图标/文字。
+                注意 Fluent Button 的悬停/按下态走的是主题资源键（不是 Background 属性），
+                只设 Background 的话一悬停就变回灰色，所以这里把四个态的背景/前景/描边一起覆盖。
+            -->
+            <Button x:Name="UnlockButton" Grid.Column="0" ToolTipService.ToolTip="解锁选择项（不删除文件）">
+                <Button.Resources>
+                    <SolidColorBrush x:Key="ButtonBackground" Color="#2176BC" />
+                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#1C67A6" />
+                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#175486" />
+                    <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="#B7D2E6" />
+                    <SolidColorBrush x:Key="ButtonBorderBrush" Color="#2176BC" />
+                    <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#1C67A6" />
+                    <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#175486" />
+                    <SolidColorBrush x:Key="ButtonBorderBrushDisabled" Color="#B7D2E6" />
+                    <SolidColorBrush x:Key="ButtonForeground" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="ButtonForegroundDisabled" Color="#F0F6FB" />
+                </Button.Resources>
                 <StackPanel Orientation="Horizontal" Spacing="7">
-                    <FontIcon Glyph="&#xE785;" FontSize="14" />
-                    <TextBlock x:Name="UnlockText" Text="解锁" Visibility="Collapsed" />
+                    <FontIcon Glyph="&#xE785;" FontSize="14" Foreground="White" />
+                    <TextBlock x:Name="UnlockText" Text="解锁选择项" Visibility="Collapsed" Foreground="White" />
                 </StackPanel>
             </Button>
             <Button x:Name="DeleteButton" Grid.Column="1" ToolTipService.ToolTip="解锁并删除选中项">
