@@ -143,7 +143,21 @@ int wmain() {
             std::wstring cmd = L"cmd.exe /c start /b \"\" \"" +
                                (PathResolver::SelfDir() + L"\\MakeLock.exe") + L"\" \"" + target + L"\" 15";
             _wsystem(cmd.c_str());
-            Sleep(600);
+
+            // 等 MakeLock 真正拿到独占锁再扫描。原来固定 Sleep(600) 在 CI 冷机上偶发失败
+            // （子进程还没打开文件就扫了），这里改成轮询：自己打不开文件即说明锁已生效。
+            bool lockedByOther = false;
+            for (int i = 0; i < 50 && !lockedByOther; ++i) {
+                Sleep(100);
+                HANDLE probe = CreateFileW(target.c_str(), GENERIC_WRITE, 0, nullptr,
+                                           OPEN_EXISTING, 0, nullptr);
+                if (probe == INVALID_HANDLE_VALUE) {
+                    lockedByOther = true;
+                } else {
+                    CloseHandle(probe);
+                }
+            }
+            Check(lockedByOther, L"MakeLock 已独占目标文件（轮询确认）");
 
             json::Value scan = json::Value::MakeObject();
             scan.Set("id", json::Value::MakeNumber(3));
