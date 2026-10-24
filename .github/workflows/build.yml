@@ -33,9 +33,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: unlocker-win32
-          # Win32 版 + 单文件版 + 右键菜单扩展
+          # 这里只传 Win32 版与右键扩展。单文件版需要先把 WinUI 编出来（载荷源），
+          # 由 release.yml 负责；本工作流不编 WinUI，所以 CMake 会跳过那个目标。
           path: |
             build/Release/Unlocker.exe
-            build/Release/Unlocker-Portable.exe
             build/Release/UnlockerShell.dll
+            build/Release/MakeLock.exe
           if-no-files-found: error

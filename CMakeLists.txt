@@ -121,7 +121,11 @@ endif()
 # ---------------------------------------------------------------- 单文件版（自解压引导器）
 # WinUI 3 的 C++ 版本没有单文件模式，所以把整个 Release 目录压成载荷塞进 exe 资源，
 # 首次运行解到 %LOCALAPPDATA%\Unlocker\App\<载荷哈希>\ 再启动。见 src/bundle/BundleMain.cpp。
-if(UNLOCKER_BUILD_APP AND Python3_Interpreter_FOUND)
+#
+# 载荷源是 WinUI 的输出目录；没有它就跳过这个目标（CI 里只跑 Win32 时属正常情况），
+# 否则打包脚本会以「源目录不存在」失败，把整个构建带挂。
+set(WINUI_RELEASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/winui/build-winui/x64/Release")
+if(UNLOCKER_BUILD_APP AND Python3_Interpreter_FOUND AND EXISTS "${WINUI_RELEASE_DIR}/Unlocker.exe")
     set(BUNDLE_DIR "${CMAKE_CURRENT_BINARY_DIR}/bundle")
     set(BUNDLE_PAYLOAD "${BUNDLE_DIR}/payload.bin")
     file(TO_NATIVE_PATH "${BUNDLE_PAYLOAD}" BUNDLE_PAYLOAD_NATIVE)
@@ -149,6 +153,8 @@ if(UNLOCKER_BUILD_APP AND Python3_Interpreter_FOUND)
     # 静态 CRT：成品不依赖 VC++ 运行库，拷到任何 Win10/11 x64 都能直接双击
     set_property(TARGET UnlockerBundle PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
     set_target_properties(UnlockerBundle PROPERTIES OUTPUT_NAME "Unlocker-Portable")
+else()
+    message(STATUS "单文件版：跳过（先跑 build.cmd winui 生成 ${WINUI_RELEASE_DIR}）")
 endif()
 
 # ---------------------------------------------------------------- 造锁工具
