@@ -48,6 +48,29 @@ python tools\check-winui-output.py winui\build-winui\x64\Release
 - 新增功能请补测试；`tests/` 下是自带的轻量框架，看 `policy_tests.cpp` 开头即可
 - 涉及 UI 的改动麻烦附一张截图（中英各一张更好）
 
+## 发布
+
+发布完全由 CI 完成，本地不需要手工打包：
+
+```bash
+git tag -a v0.9.0 -m "v0.9.0"
+git push origin v0.9.0        # 触发 release.yml：编 WinUI → 校验产物 → 打单文件版 → 建 Release
+```
+
+`build.yml` 在每次 push / PR 时只跑 Win32 + 单元测试（不编 WinUI，省 20 分钟）；
+`release.yml` 需要 WinUI 产物做载荷，所以它自己先编一遍。
+
+改完 `.github/workflows/` 之后，可以用 API 空跑一次验证语法（不会建 Release）：
+
+```bash
+curl -X POST -H "Authorization: Bearer <token>" \
+  https://api.github.com/repos/LLLEIHH/Unlocker/actions/workflows/<id>/dispatches \
+  -d '{"ref":"main"}'
+```
+
+工作流文件被 GitHub 判无效时，run 不会产生任何 job、名字直接显示文件路径——
+这种时候上面的接口会返回 422 并在 `message` 里给出具体行号，比翻网页快。
+
 ## 安全问题
 
 见 [SECURITY.md](SECURITY.md)，不要开公开 issue。
