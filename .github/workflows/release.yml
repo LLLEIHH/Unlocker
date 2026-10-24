@@ -1,6 +1,6 @@
 name: release
 
-# 推 v* 标签时构建并发布；也可以手动跑一次，只产出 artifact 不发 Release。
+# 推 v* 标签时构建并发布；也可以手动跑一次（workflow_dispatch），只产出 artifact 不发 Release。
 on:
   push:
     tags: [ 'v*' ]
@@ -13,26 +13,64 @@ jobs:
   portable:
     name: 构建单文件版
     runs-on: windows-latest
+    env:
+      # 沙箱/CI 上常带重复代理变量，会让 MSBuild 直接 MSB6001
+      HTTP_PROXY: ''
+      HTTPS_PROXY: ''
+      http_proxy: ''
+      https_proxy: ''
 
     steps:
       - uses: actions/checkout@v4
 
+      - name: 环境信息
+        shell: pwsh
+        run: |
+          Write-Host "python: $((python --version) 2>&1)"
+          Write-Host "cmake : $((cmake --version) 2>&1 | Select-Object -First 1)"
+
       # 单文件版的载荷来自 WinUI 输出目录，所以必须先编 WinUI，再编一次让 CMake 打包载荷。
+      # 失败时把日志尾部转成 annotation：普通 step 日志需要登录才能下载，annotation 可直接读。
       - name: 构建 WinUI 3
-        shell: cmd
-        run: build.cmd winui
+        shell: pwsh
+        run: |
+          & cmd /c build.cmd winui 2>&1 | Tee-Object -FilePath winui-build.log
+          if ($LASTEXITCODE -ne 0) {
+            Get-Content winui-build.log -Tail 25 | ForEach-Object { Write-Host "::error::$_" }
+            exit $LASTEXITCODE
+          }
 
       - name: 校验 WinUI 产物（PRI / XBF / 框架 DLL）
-        shell: cmd
-        run: python tools\check-winui-output.py winui\build-winui\x64\Release
+        shell: pwsh
+        run: |
+          python tools\check-winui-output.py winui\build-winui\x64\Release 2>&1 |
+            Tee-Object -FilePath check.log
+          if ($LASTEXITCODE -ne 0) {
+            Get-Content check.log | ForEach-Object { Write-Host "::error::$_" }
+            Write-Host "::error::---- 输出目录里最大的 12 个文件 ----"
+            Get-ChildItem winui\build-winui\x64\Release -File -ErrorAction SilentlyContinue |
+              Sort-Object Length -Descending | Select-Object -First 12 |
+              ForEach-Object { Write-Host "::error::  $($_.Name) = $($_.Length)" }
+            exit 1
+          }
 
-      - name: 构建并按入单文件版
-        shell: cmd
-        run: build.cmd
+      - name: 构建并打入单文件版
+        shell: pwsh
+        run: |
+          & cmd /c build.cmd 2>&1 | Tee-Object -FilePath build.log
+          if ($LASTEXITCODE -ne 0) {
+            Get-Content build.log -Tail 25 | ForEach-Object { Write-Host "::error::$_" }
+            exit $LASTEXITCODE
+          }
 
       - name: 冒烟测试
-        shell: cmd
-        run: build\Release\policy_tests.exe
+        shell: pwsh
+        run: |
+          & cmd /c "build\Release\policy_tests.exe" 2>&1 | Tee-Object -FilePath policy.log
+          if ($LASTEXITCODE -ne 0) {
+            Get-Content policy.log -Tail 20 | ForEach-Object { Write-Host "::error::policy_tests: $_" }
+            exit $LASTEXITCODE
+          }
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4

@@ -12,6 +12,16 @@ import re
 import sys
 import zlib
 
+# Windows 上 sys.stdout 默认走 ANSI 代码页（CI 英文镜像是 cp1252），打印中文会直接
+# UnicodeEncodeError 崩掉 —— 校验结果本身没错，却把构建带挂了（2026-10-24 发布时踩到）。
+# 统一强制 UTF-8 并对无法编码的字符降级替换，让脚本在任何控制台上都能跑完。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
+
 TYPE = {
     "MATCH_EXACT": 0,
     "MATCH_PREFIX": 1,
