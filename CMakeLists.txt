@@ -118,6 +118,39 @@ if(UNLOCKER_BUILD_APP)
     set_target_properties(UnlockerShell PROPERTIES OUTPUT_NAME "UnlockerShell")
 endif()
 
+# ---------------------------------------------------------------- 单文件版（自解压引导器）
+# WinUI 3 的 C++ 版本没有单文件模式，所以把整个 Release 目录压成载荷塞进 exe 资源，
+# 首次运行解到 %LOCALAPPDATA%\Unlocker\App\<载荷哈希>\ 再启动。见 src/bundle/BundleMain.cpp。
+if(UNLOCKER_BUILD_APP AND Python3_Interpreter_FOUND)
+    set(BUNDLE_DIR "${CMAKE_CURRENT_BINARY_DIR}/bundle")
+    set(BUNDLE_PAYLOAD "${BUNDLE_DIR}/payload.bin")
+    file(TO_NATIVE_PATH "${BUNDLE_PAYLOAD}" BUNDLE_PAYLOAD_NATIVE)
+    string(REPLACE "\\" "\\\\" BUNDLE_PAYLOAD_RC "${BUNDLE_PAYLOAD_NATIVE}")
+
+    add_custom_command(
+        OUTPUT "${BUNDLE_PAYLOAD}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${BUNDLE_DIR}"
+        COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/make_bundle.py"
+                --src "${CMAKE_CURRENT_SOURCE_DIR}/winui/build-winui/x64/Release"
+                --out "${BUNDLE_PAYLOAD}"
+        COMMENT "打包 WinUI 载荷（单文件版）"
+        VERBATIM)
+    add_custom_target(bundle_payload DEPENDS "${BUNDLE_PAYLOAD}")
+
+    # 资源脚本里的载荷路径是绝对路径，所以按配置生成一份到 build 目录
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/bundle/Bundle.rc.in"
+                   "${BUNDLE_DIR}/Bundle.rc" @ONLY)
+
+    add_executable(UnlockerBundle WIN32
+        src/bundle/BundleMain.cpp
+        "${BUNDLE_DIR}/Bundle.rc")
+    add_dependencies(UnlockerBundle bundle_payload)
+    target_link_libraries(UnlockerBundle PRIVATE cabinet)
+    # 静态 CRT：成品不依赖 VC++ 运行库，拷到任何 Win10/11 x64 都能直接双击
+    set_property(TARGET UnlockerBundle PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
+    set_target_properties(UnlockerBundle PROPERTIES OUTPUT_NAME "Unlocker-Portable")
+endif()
+
 # ---------------------------------------------------------------- 造锁工具
 add_executable(MakeLock tools/MakeLock/MakeLock.cpp)
 set_target_properties(MakeLock PROPERTIES OUTPUT_NAME "MakeLock")

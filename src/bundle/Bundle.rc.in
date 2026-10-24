@@ -1,0 +1,35 @@
+// 单文件版 exe 的资源脚本（由 CMake configure_file 生成到 build/bundle/）。
+// 载荷路径是绝对路径 —— rc.exe 不认相对路径跨越 build 目录。
+#include <winver.h>
+#include <windows.h>
+
+1 PAYLOAD "@BUNDLE_PAYLOAD_RC@"
+IDI_APPICON ICON "unlocker.ico"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     0,8,0,0
+PRODUCTVERSION  0,8,0,0
+FILEFLAGSMASK 0x3fL
+FILEFLAGS 0x0L
+FILEOS 0x40004L
+FILETYPE 0x1L
+FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "080404B0"
+        BEGIN
+            VALUE "FileDescription",  "Unlocker 单文件版 - 文件占用解锁工具\0"
+            VALUE "FileVersion",      "0.8.0.0\0"
+            VALUE "InternalName",     "Unlocker-Portable\0"
+            VALUE "OriginalFilename", "Unlocker-Portable.exe\0"
+            VALUE "ProductName",      "Unlocker\0"
+            VALUE "ProductVersion",   "0.8.0.0\0"
+            VALUE "Comments",         "自解压引导器；首次运行释放到 %LOCALAPPDATA%\\Unlocker\\App\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0804, 1200
+    END
+END

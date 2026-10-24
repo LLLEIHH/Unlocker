@@ -242,3 +242,39 @@ python tools\make_icon.py --sheet preview.png        :: 三方案对照图
 
 校验方式（不依赖任何额外工具）：`FindResourceW(exe, 101, RT_GROUP_ICON)` 非空，
 或 `ExtractIconExW` 取第 0 个图标能画出来。
+
+## 十、单文件版（Unlocker-Portable.exe）
+
+WinUI 3 的 C++ 版本**没有**单文件模式：运行时 DLL、`resources.pri`、`*.xbf` 必须落盘
+（实测 Release 目录 189 项 / 62 MB）。所以单文件版是个**自解压引导器**：
+
+```
+unlocker/Unlocker-Portable.exe          # 29 MB，单文件，拷到哪都能双击
+   └─ 内嵌 RCDATA 载荷（27.5 MB）
+        └─ 首次运行解压到 %LOCALAPPDATA%\Unlocker\App\<载荷哈希>\
+             └─ 启动真正的 Unlocker.exe
+```
+
+| 项 | 说明 |
+| --- | --- |
+| 体积 | 62.1 MB → **27.5 MB**（XPRESS_HUFF，2.26x） |
+| 依赖 | 只有 `Cabinet.dll` / `KERNEL32` / `USER32` —— **静态 CRT，不需要 VC++ 运行库** |
+| 首次运行 | 解压约 3~5 秒，之后写 `ready.tag` |
+| 再次运行 | **0.5 秒**出窗口（命中缓存，不重复解压） |
+| 升级 | 载荷哈希变了就落到新目录，旧版本自动清理，不会越用越大 |
+| 并发 | 命名互斥量 `Local\Unlocker.Bundle.Extract` 串行化解压 |
+| 命令行 | 参数原样转发给内层 exe，退出码原样返回（CLI / `--worker` 都靠这条） |
+
+**为什么不用压缩库**：本机没有 zlib 可链，而 Windows 自带的 CompressAPI 恰好能用。
+坑在于「自己拼压缩流格式」——MSZIP 的块头格式试了三种写法都和系统解压器对不上（都返回 605），
+最后改成**生产和消费都用 CompressAPI**（`tools/make_bundle.py` 压缩、`BundleMain.cpp` 解压），
+格式天然一致。XPRESS_HUFF 对 DLL 约 2.3x，解压 60 MB 只要 0.1 秒。
+
+构建：
+
+```bat
+build.cmd            :: 走 CMake，会自动先跑 tools/make_bundle.py 生成载荷
+```
+
+产物 `build\Release\Unlocker-Portable.exe`。注意 `make_bundle.py` 打包的是
+`winui\build-winui\x64\Release`，所以要先 `build.cmd winui`，否则载荷里是旧 UI。
