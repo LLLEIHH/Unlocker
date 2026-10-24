@@ -34,6 +34,7 @@ set(UNLOCKER_COMMON_SRC
     src/common/StringUtil.cpp
     src/common/Log.cpp
     src/common/ErrorMap.cpp
+    src/common/Lang.cpp
 )
 
 set(UNLOCKER_CORE_SRC

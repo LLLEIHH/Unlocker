@@ -94,6 +94,9 @@ struct MainWindow : MainWindowT<MainWindow> {
 private:
     void SetupWindow();
     void ApplyNarrowLayout();
+    // 按当前语言（ul::GetLang()）把静态文案、提示、横幅、列表全部刷一遍。
+    // 切换语言后调用它即可，不需要重启。
+    void ApplyLanguage();
     void RebuildFileList();
     void RebuildProcessList();
     void SetStatus(std::wstring const& text);

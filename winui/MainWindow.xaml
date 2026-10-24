@@ -41,10 +41,11 @@
                     <FontIcon Glyph="&#xE785;" FontSize="11" Foreground="White" />
                 </Border>
                 <TextBlock Text="Unlocker" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
-                <TextBlock Text="文件占用解除工具" FontSize="12" VerticalAlignment="Center" Margin="4,1,0,0"
+                <TextBlock x:Name="TitleBarSubtitle" Text="文件占用解除工具" FontSize="12" VerticalAlignment="Center" Margin="4,1,0,0"
                            MaxLines="1" TextTrimming="CharacterEllipsis"
                            Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
             </StackPanel>
+
         </Grid>
 
         <!-- 顶部横幅：被手动提权 / 规则表 fail-closed 时出现 -->
@@ -56,15 +57,20 @@
                  IsClosable="False"
                  Title="提示" />
 
-        <!-- 工具栏 -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" Margin="12,6,12,0">
+        <!-- 工具栏（右侧留一格放语言切换） -->
+        <Grid Grid.Row="2" Margin="12,6,12,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
             <Button x:Name="AddFileButton">
                 <Button.KeyboardAccelerators>
                     <KeyboardAccelerator Key="O" Modifiers="Control" />
                 </Button.KeyboardAccelerators>
                 <StackPanel Orientation="Horizontal" Spacing="7">
                     <FontIcon Glyph="&#xE8E5;" FontSize="14" />
-                    <TextBlock Text="添加文件" />
+                    <TextBlock x:Name="AddFileText" Text="添加文件" />
                 </StackPanel>
             </Button>
             <Button x:Name="AddFolderButton">
@@ -73,18 +79,38 @@
                 </Button.KeyboardAccelerators>
                 <StackPanel Orientation="Horizontal" Spacing="7">
                     <FontIcon Glyph="&#xE8B7;" FontSize="14" />
-                    <TextBlock Text="添加文件夹" />
+                    <TextBlock x:Name="AddFolderText" Text="添加文件夹" />
                 </StackPanel>
             </Button>
             <Button x:Name="DeepScanButton">
                 <StackPanel Orientation="Horizontal" Spacing="7">
                     <FontIcon Glyph="&#xE7BA;" FontSize="14" />
-                    <TextBlock Text="管理员深扫" />
+                    <TextBlock x:Name="DeepScanText" Text="管理员深扫" />
                 </StackPanel>
             </Button>
             <CheckBox x:Name="ForceCheck" Content="强制模式" VerticalAlignment="Center" MinWidth="0" Margin="8,0,0,0" />
             <ProgressRing x:Name="BusyRing" Width="20" Height="20" IsActive="False" VerticalAlignment="Center" Margin="10,0,0,0" />
         </StackPanel>
+
+            <!--
+                语言切换 ZH/EN。
+                没有放进标题栏：SetTitleBar 会把整块标题栏当拖拽区，连子元素上的点击都吞掉
+                （实测点不动）。放在工具栏右端同样在右上角，且点击可靠。
+            -->
+            <Button x:Name="LangButton"
+                    Grid.Column="1"
+                    VerticalAlignment="Center"
+                    Padding="9,2"
+                    MinWidth="0"
+                    MinHeight="0"
+                    FontSize="12"
+                    ToolTipService.ToolTip="切换界面语言 / Switch interface language（Ctrl+L）">
+                <Button.KeyboardAccelerators>
+                    <KeyboardAccelerator Key="L" Modifiers="Control" />
+                </Button.KeyboardAccelerators>
+                <TextBlock x:Name="LangText" Text="ZH" FontSize="12" FontWeight="SemiBold" />
+            </Button>
+        </Grid>
 
         <!-- 文件卡片 -->
         <Border x:Name="FilesCard"
@@ -109,10 +135,10 @@
                         <ColumnDefinition Width="170" />
                         <ColumnDefinition Width="96" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="1" Text="路径" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <TextBlock Grid.Column="2" Text="大小" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <TextBlock Grid.Column="3" Text="占用者" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <TextBlock Grid.Column="4" Text="状态" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock x:Name="HdrPath" Grid.Column="1" Text="路径" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock x:Name="HdrSize" Grid.Column="2" Text="大小" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock x:Name="HdrOwner" Grid.Column="3" Text="占用者" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock x:Name="HdrFileState" Grid.Column="4" Text="状态" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </Grid>
 
                 <ListView x:Name="FileList"
@@ -142,12 +168,13 @@
                             VerticalAlignment="Center"
                             Spacing="6">
                     <FontIcon Glyph="&#xE838;" FontSize="42" Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
-                    <TextBlock Text="把文件或文件夹拖到这里"
+                    <TextBlock x:Name="EmptyTitle" Text="把文件或文件夹拖到这里"
                                HorizontalAlignment="Center"
                                FontSize="20"
                                FontWeight="SemiBold"
                                Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
-                    <TextBlock Text="也可以点击上方「添加文件 / 添加文件夹」，支持多选与混合拖入"
+                    <TextBlock x:Name="EmptyDesc"
+                               Text="也可以点击上方「添加文件 / 添加文件夹」，支持多选与混合拖入"
                                HorizontalAlignment="Center"
                                FontSize="14"
                                Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
@@ -179,11 +206,11 @@
                         <ColumnDefinition Width="60" />
                         <ColumnDefinition Width="64" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="1" Text="进程" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <TextBlock Grid.Column="2" Text="PID" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <TextBlock Grid.Column="3" Text="描述" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <TextBlock Grid.Column="4" Text="句柄" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <TextBlock Grid.Column="5" Text="状态" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock x:Name="HdrProc" Grid.Column="1" Text="进程" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock x:Name="HdrPid" Grid.Column="2" Text="PID" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock x:Name="HdrDesc" Grid.Column="3" Text="描述" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock x:Name="HdrHandles" Grid.Column="4" Text="句柄" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock x:Name="HdrProcState" Grid.Column="5" Text="状态" Style="{ThemeResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </Grid>
 
                 <ListView x:Name="ProcessList" Grid.Row="1" SelectionMode="Single" Padding="4,0,4,4">

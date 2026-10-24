@@ -13,6 +13,7 @@
 #include <utility>
 
 #include "common/ErrorMap.h"
+#include "common/Lang.h"
 #include "common/Log.h"
 #include "common/StringUtil.h"
 #include "core/FileOps.h"
@@ -76,10 +77,10 @@ std::wstring OwnersSummary(UiItem const& it) {
 }
 
 std::wstring StateText(UiItem const& it) {
-    if (it.verdict == ul::Verdict::Deny) return L"✕ 已阻止";
-    if (!it.scanned) return it.scanning ? L"扫描中…" : L"待扫描";
+    if (it.verdict == ul::Verdict::Deny) return ul::T(L"✕ 已阻止", L"✕ Blocked");
+    if (!it.scanned) return it.scanning ? ul::T(L"扫描中…", L"Scanning…") : ul::T(L"待扫描", L"Pending");
     std::wstring t = ul::OccupancyText(it.state);
-    if (it.verdict == ul::Verdict::Confirm) t = std::wstring(L"需确认 · ") + t;
+    if (it.verdict == ul::Verdict::Confirm) t = std::wstring(ul::T(L"需确认 · ", L"Confirm · ")) + t;
     return t;
 }
 
@@ -352,6 +353,93 @@ void MainWindow::ApplyNarrowLayout() {
     RescanText().Visibility(vis);
 }
 
+void MainWindow::ApplyLanguage() {
+    // 静态文案：XAML 里给出中文默认值，这里按当前语言覆盖一遍。
+    // 语言切换后调本函数即可，不需要重建窗口。
+    TitleBarSubtitle().Text(Hs(ul::T(L"文件占用解除工具", L"File lock releaser")));
+
+    AddFileText().Text(Hs(ul::T(L"添加文件", L"Add files")));
+    AddFolderText().Text(Hs(ul::T(L"添加文件夹", L"Add folder")));
+    DeepScanText().Text(Hs(ul::T(L"管理员深扫", L"Admin deep scan")));
+    ForceCheck().Content(box_value(Hs(ul::T(L"强制模式", L"Force mode"))));
+
+    HdrPath().Text(Hs(ul::T(L"路径", L"Path")));
+    HdrSize().Text(Hs(ul::T(L"大小", L"Size")));
+    HdrOwner().Text(Hs(ul::T(L"占用者", L"Owner")));
+    HdrFileState().Text(Hs(ul::T(L"状态", L"State")));
+    HdrProc().Text(Hs(ul::T(L"进程", L"Process")));
+    HdrPid().Text(L"PID");
+    HdrDesc().Text(Hs(ul::T(L"描述", L"Description")));
+    HdrHandles().Text(Hs(ul::T(L"句柄", L"Handles")));
+    HdrProcState().Text(Hs(ul::T(L"状态", L"State")));
+
+    EmptyTitle().Text(Hs(ul::T(L"把文件或文件夹拖到这里", L"Drop files or folders here")));
+    EmptyDesc().Text(Hs(ul::T(
+        L"也可以点击上方「添加文件 / 添加文件夹」，支持多选与混合拖入",
+        L"Or use Add files / Add folder above; multi-select and mixed drops are supported")));
+
+    UnlockText().Text(Hs(ul::T(L"解锁选择项", L"Unlock selected")));
+    DeleteText().Text(Hs(ul::T(L"解锁并删除", L"Unlock and delete")));
+    RenameText().Text(Hs(ul::T(L"解锁并改名", L"Unlock and rename")));
+    MoveText().Text(Hs(ul::T(L"解锁并移动", L"Unlock and move")));
+    CopyText().Text(Hs(ul::T(L"解锁并复制", L"Unlock and copy")));
+    RescanText().Text(Hs(ul::T(L"重新扫描", L"Rescan")));
+
+    // 悬停提示
+    ToolTipService::SetToolTip(AddFileButton(),
+        box_value(Hs(ul::T(L"选择一个或多个文件加入列表", L"Pick one or more files to add"))));
+    ToolTipService::SetToolTip(AddFolderButton(),
+        box_value(Hs(ul::T(L"选择一个文件夹加入列表", L"Pick a folder to add"))));
+    ToolTipService::SetToolTip(DeepScanButton(),
+        box_value(Hs(ul::T(L"以管理员权限重新扫描，可以看到服务与受保护进程的占用",
+                           L"Rescan as administrator to see services and protected processes"))));
+    ToolTipService::SetToolTip(ForceCheck(),
+        box_value(Hs(ul::T(L"允许终止占用进程后再操作（系统关键进程仍会被拒绝）",
+                           L"Allow ending the owning process before acting (critical system processes are still refused)"))));
+    ToolTipService::SetToolTip(RescanButton(),
+        box_value(Hs(ul::T(L"重新扫描列表中所有项目的占用状态",
+                           L"Rescan occupancy for every item in the list"))));
+    ToolTipService::SetToolTip(UnlockButton(),
+        box_value(Hs(ul::T(L"解锁选择项（不删除文件）", L"Unlock the selected items (files are kept)"))));
+    ToolTipService::SetToolTip(DeleteButton(),
+        box_value(Hs(ul::T(L"解锁并删除选中项", L"Unlock and delete the selected items"))));
+    ToolTipService::SetToolTip(RenameButton(),
+        box_value(Hs(ul::T(L"解锁并改名", L"Unlock and rename"))));
+    ToolTipService::SetToolTip(MoveButton(),
+        box_value(Hs(ul::T(L"解锁并移动到…", L"Unlock and move to…"))));
+    ToolTipService::SetToolTip(CopyButton(),
+        box_value(Hs(ul::T(L"解锁并复制到…", L"Unlock and copy to…"))));
+    ToolTipService::SetToolTip(LangButton(),
+        box_value(Hs(ul::T(L"切换界面语言 / Switch interface language",
+                           L"Switch interface language"))));
+
+    // 顶部横幅
+    if (failClosed_) {
+        Banner().Severity(InfoBarSeverity::Error);
+        Banner().Title(Hs(ul::T(L"规则表自检失败", L"Rule table self-check failed")));
+        Banner().Message(Hs(ul::T(L"已进入保护模式：所有操作都会被拒绝。请重新安装本程序。",
+                                  L"Protection mode is active: every operation will be refused. Please reinstall.")));
+        Banner().IsOpen(true);
+    } else if (elevated_) {
+        Banner().Severity(InfoBarSeverity::Warning);
+        Banner().Title(Hs(ul::T(L"当前以管理员权限运行", L"Running as administrator")));
+        Banner().Message(Hs(ul::T(L"推荐以普通权限启动，拖放与右键菜单会更稳定。",
+                                  L"Start without elevation to keep drag-and-drop and the context menu reliable.")));
+        Banner().IsOpen(true);
+    } else {
+        Banner().IsOpen(false);
+    }
+
+    // 语言按钮显示「当前语言」：ZH / EN
+    LangText().Text(ul::GetLang() == ul::Lang::En ? L"EN" : L"ZH");
+
+    // 状态栏 + 列表（状态徽章、占用者、汇总都跟着重算）
+    SetStatus(elevated_ ? ul::T(L"执行组件：运行中（管理员权限 UI）", L"Worker: running (elevated UI)")
+                        : ul::T(L"执行组件：未启动（首次写操作时会请求管理员权限）",
+                                L"Worker: not started (elevation is requested on first write)"));
+    RebuildFileList();
+}
+
 void MainWindow::SetupWindow() {
     Title(L"Unlocker");
 
@@ -454,33 +542,20 @@ void MainWindow::SetupWindow() {
         if (alive_.load()) OnRename(nullptr, nullptr);
     });
 
-    // 按钮悬停提示
-    ToolTipService::SetToolTip(AddFileButton(), box_value(Hs(L"选择一个或多个文件加入列表")));
-    ToolTipService::SetToolTip(AddFolderButton(), box_value(Hs(L"选择一个文件夹加入列表")));
-    ToolTipService::SetToolTip(DeepScanButton(), box_value(Hs(L"以管理员权限重新扫描，可以看到服务与受保护进程的占用")));
-    ToolTipService::SetToolTip(ForceCheck(), box_value(Hs(L"允许终止占用进程后再操作（系统关键进程仍会被拒绝）")));
-    ToolTipService::SetToolTip(RescanButton(), box_value(Hs(L"重新扫描列表中所有项目的占用状态")));
-
     elevated_ = ul::IsElevated();
+    if (elevated_ && !failClosed_) ul::PatchDropForElevatedUi(Hwnd());
 
-    if (failClosed_) {
-        Banner().Severity(InfoBarSeverity::Error);
-        Banner().Title(L"规则表自检失败");
-        Banner().Message(L"已进入保护模式：所有操作都会被拒绝。请重新安装本程序。");
-        Banner().IsOpen(true);
-    } else if (elevated_) {
-        Banner().Severity(InfoBarSeverity::Warning);
-        Banner().Title(L"当前以管理员权限运行");
-        Banner().Message(L"推荐以普通权限启动，拖放与右键菜单会更稳定。");
-        Banner().IsOpen(true);
-        ul::PatchDropForElevatedUi(Hwnd());
-    }
+    // 语言切换：点一下换一种语言，立即全量刷新（同时写注册表记住选择）
+    LangButton().Click([this](auto&&, auto&&) {
+        if (!alive_.load()) return;
+        const ul::Lang next = (ul::GetLang() == ul::Lang::En) ? ul::Lang::Zh : ul::Lang::En;
+        ul::SetLang(next);
+        ul::SaveLangPreference(next);
+        ApplyLanguage();
+    });
 
-    SetStatus(elevated_ ? L"执行组件：运行中（管理员权限 UI）"
-                        : L"执行组件：未启动（首次写操作时会请求管理员权限）");
     SetBusy(false);
-    RefreshEmptyHint();
-    UpdateSummary();
+    ApplyLanguage();
 
     // 深浅色切换时行内的自定义配色需要重建
     RootGrid().ActualThemeChanged([this](auto&&, auto&&) {
@@ -511,7 +586,7 @@ void MainWindow::ShowMessage(std::wstring const& title, std::wstring const& text
     dlg.XamlRoot(RootGrid().XamlRoot());
     dlg.Title(box_value(Hs(title)));
     dlg.Content(box_value(Hs(text)));
-    dlg.CloseButtonText(L"确定");
+    dlg.CloseButtonText(ul::T(L"确定", L"OK"));
     // fire-and-forget：调用方在 UI 线程，这里不等待结果
     dlg.ShowAsync();
 }
@@ -550,11 +625,16 @@ void MainWindow::UpdateSummary() {
         }
     }
     std::wstring s;
-    if (deny)     s += std::to_wstring(deny) + L" 个已阻止";
-    if (locked)  { if (!s.empty()) s += L" · "; s += std::to_wstring(locked) + L" 个锁定"; }
-    if (confirm) { if (!s.empty()) s += L" · "; s += std::to_wstring(confirm) + L" 个需确认"; }
-    if (ok)      { if (!s.empty()) s += L" · "; s += std::to_wstring(ok) + L" 个可操作"; }
-    if (pending) { if (!s.empty()) s += L" · "; s += std::to_wstring(pending) + L" 个待扫描"; }
+    auto add = [&s](int n, const wchar_t* zh, const wchar_t* en) {
+        if (!n) return;
+        if (!s.empty()) s += L" · ";
+        s += ul::Tf(zh, en, n);
+    };
+    add(deny, L"%d 个已阻止", L"%d blocked");
+    add(locked, L"%d 个锁定", L"%d locked");
+    add(confirm, L"%d 个需确认", L"%d need confirmation");
+    add(ok, L"%d 个可操作", L"%d ready");
+    add(pending, L"%d 个待扫描", L"%d pending");
     SummaryText().Text(Hs(s));
 }
 
@@ -592,7 +672,7 @@ void MainWindow::RebuildFileList() {
         Grid::SetColumn(path, 1);
         row.Children().Append(path);
 
-        auto size = MakeText(Hs(it.dir ? L"<目录>" : ul::FormatSize(it.size)), 12.5, TextSecondary(dark), false);
+        auto size = MakeText(Hs(it.dir ? ul::T(L"<目录>", L"<Folder>") : ul::FormatSize(it.size)), 12.5, TextSecondary(dark), false);
         Grid::SetColumn(size, 2);
         row.Children().Append(size);
 
@@ -689,10 +769,10 @@ void MainWindow::RebuildProcessList() {
         row.Children().Append(hb);
 
         // 进程状态：受保护 > 映像 > 占用
-        std::wstring st = L"占用";
+        std::wstring st = ul::T(L"占用", L"Using");
         Windows::UI::Color stc = dark ? Rgb(0xFF, 0x8A, 0x8A) : Rgb(0xC0, 0x00, 0x00);
-        if (o.prot) { st = L"受保护"; stc = dark ? Rgb(0xFF, 0xBC, 0x74) : Rgb(0x85, 0x4F, 0x0B); }
-        else if (o.image) { st = L"映像"; stc = dark ? Rgb(0xFF, 0xB8, 0x6B) : Rgb(0xC8, 0x60, 0x00); }
+        if (o.prot) { st = ul::T(L"受保护", L"Protected"); stc = dark ? Rgb(0xFF, 0xBC, 0x74) : Rgb(0x85, 0x4F, 0x0B); }
+        else if (o.image) { st = ul::T(L"映像", L"Mapped"); stc = dark ? Rgb(0xFF, 0xB8, 0x6B) : Rgb(0xC8, 0x60, 0x00); }
         auto status = MakeText(Hs(st), 12, SolidColorBrush(stc), false);
         Grid::SetColumn(status, 5);
         row.Children().Append(status);
@@ -711,9 +791,12 @@ void MainWindow::RebuildProcessList() {
     if (skipped > 0) {
         Grid row;
         row.Padding(Thickness{ 12, 6, 12, 6 });
-        auto text = MakeText(Hs(L"另有 " + std::to_wstring(skipped) +
-                                L" 个受保护进程无法检查（可能是系统进程或安全软件）"),
-                             12, TextSecondary(dark), true);
+        auto text = MakeText(
+            Hs(ul::Tf(L"另有 %d 个受保护进程无法检查（可能是系统进程或安全软件）",
+                      L"%d protected process(es) can't be inspected "
+                      L"(system processes or security software)",
+                      skipped)),
+            12, TextSecondary(dark), true);
         row.Children().Append(text);
         ProcessList().Items().Append(row);
     }
@@ -735,7 +818,9 @@ std::vector<size_t> MainWindow::SelectedIndices() {
 void MainWindow::AddPaths(std::vector<std::wstring> const& raw) {
     if (raw.empty()) return;
     if (raw.size() > 500) {
-        SetStatus(L"一次拖入了 " + std::to_wstring(raw.size()) + L" 个对象，超过单批 500 的上限，请分批处理");
+        SetStatus(ul::Tf(L"一次拖入了 %d 个对象，超过单批 500 的上限，请分批处理",
+                         L"%d objects at once — the per-batch limit is 500, please split them",
+                         static_cast<int>(raw.size())));
         return;
     }
 
@@ -795,7 +880,7 @@ void MainWindow::AddPaths(std::vector<std::wstring> const& raw) {
     }
 
     if (toScan.empty()) {
-        SetStatus(rejected ? L"没有可加入的路径（UNC / 回收站 / 无法解析的快捷方式已拒绝）" : L"没有新的可加入项");
+        SetStatus(rejected ? ul::T(L"没有可加入的路径（UNC / 回收站 / 无法解析的快捷方式已拒绝）", L"Nothing to add (UNC paths, Recycle Bin and unresolvable shortcuts are rejected)") : ul::T(L"没有新的可加入项", L"No new items to add"));
         return;
     }
 
@@ -803,7 +888,7 @@ void MainWindow::AddPaths(std::vector<std::wstring> const& raw) {
     // 留一条可核对的痕迹：拖放 / 单实例转发到底有没有送到（W2 / W9 的验收依据）
     ul::LogI(L"UI 加入 " + std::to_wstring(toScan.size()) + L" 项（拒绝 " +
              std::to_wstring(rejected) + L" 项），开始本地扫描");
-    SetStatus(L"正在扫描占用进程…");
+    SetStatus(ul::T(L"正在扫描占用进程…", L"Scanning for owning processes…"));
     StartLocalScan(toScan);
 }
 
@@ -870,7 +955,7 @@ void MainWindow::StartLocalScan(std::vector<std::pair<uint64_t, std::wstring>> t
                     }
                 }
                 impl->RebuildFileList();
-                impl->SetStatus(L"扫描完成");
+                impl->SetStatus(ul::T(L"扫描完成", L"Scan complete"));
             });
         }
     }).detach();
@@ -879,7 +964,7 @@ void MainWindow::StartLocalScan(std::vector<std::pair<uint64_t, std::wstring>> t
 void MainWindow::StartDeepScan(std::vector<std::pair<uint64_t, std::wstring>> targets) {
     if (targets.empty()) return;
     SetBusy(true);
-    SetStatus(L"正在请求管理员权限以深扫…");
+    SetStatus(ul::T(L"正在请求管理员权限以深扫…", L"Requesting administrator rights for the deep scan…"));
 
     std::thread([this, targets] {
         std::lock_guard<std::mutex> lk(workerMutex_);
@@ -910,7 +995,7 @@ void MainWindow::StartDeepScan(std::vector<std::pair<uint64_t, std::wstring>> ta
                     const int cur = static_cast<int>(v.GetNumber("cur", 0));
                     const int total = static_cast<int>(v.GetNumber("total", 0));
                     impl->queue_.TryEnqueue([impl, cur, total] {
-                        impl->SetStatus(L"深扫中 " + std::to_wstring(cur) + L"/" + std::to_wstring(total));
+                        impl->SetStatus(ul::Tf(L"深扫中 %d/%d", L"Deep scanning %d/%d", cur, total));
                     });
                 }
                 return;
@@ -925,7 +1010,7 @@ void MainWindow::StartDeepScan(std::vector<std::pair<uint64_t, std::wstring>> ta
                 queue_.TryEnqueue([impl, err] {
                     if (!impl->alive_.load()) return;
                     impl->SetBusy(false);
-                    impl->SetStatus(err.empty() ? L"深扫失败" : err);
+                    impl->SetStatus(err.empty() ? ul::T(L"深扫失败", L"Deep scan failed") : err);
                 });
             }
             return;
@@ -999,7 +1084,7 @@ void MainWindow::StartDeepScan(std::vector<std::pair<uint64_t, std::wstring>> ta
                 }
                 impl->SetBusy(false);
                 impl->RebuildFileList();
-                impl->SetStatus(L"深扫完成（管理员）");
+                impl->SetStatus(ul::T(L"深扫完成（管理员）", L"Deep scan complete (administrator)"));
             });
         }
     }).detach();
@@ -1022,12 +1107,12 @@ void MainWindow::StartOp(ul::IpcOp op, std::wstring arg) {
         for (size_t i : sel) if (i < items_.size()) add(items_[i]);
     }
     if (paths.empty()) {
-        SetStatus(denied ? L"选中的项目全部被内置黑名单阻止" : L"没有可操作的项目，请先添加文件");
+        SetStatus(denied ? ul::T(L"选中的项目全部被内置黑名单阻止", L"Every selected item is blocked by the built-in rules") : ul::T(L"没有可操作的项目，请先添加文件", L"Nothing to act on — add files first"));
         return;
     }
 
     SetBusy(true);
-    SetStatus(L"正在请求管理员权限…（首次操作会弹出 UAC）");
+    SetStatus(ul::T(L"正在请求管理员权限…（首次操作会弹出 UAC）", L"Requesting administrator rights… (UAC appears on first use)"));
     const bool force = ForceCheck().IsChecked().GetBoolean();
 
     std::thread([this, op, arg, paths, force] {
@@ -1061,7 +1146,7 @@ void MainWindow::StartOp(ul::IpcOp op, std::wstring arg) {
                     const int cur = static_cast<int>(v.GetNumber("cur", 0));
                     const int total = static_cast<int>(v.GetNumber("total", 0));
                     impl->queue_.TryEnqueue([impl, cur, total] {
-                        impl->SetStatus(L"处理中 " + std::to_wstring(cur) + L"/" + std::to_wstring(total));
+                        impl->SetStatus(ul::Tf(L"处理中 %d/%d", L"Working %d/%d", cur, total));
                     });
                 }
                 return;
@@ -1075,20 +1160,21 @@ void MainWindow::StartOp(ul::IpcOp op, std::wstring arg) {
         if (!ok || !got) {
             summary = err;
         } else {
-            summary = L"成功 " + std::to_wstring(static_cast<int>(result.GetNumber("okCount", 0))) +
-                      L"，失败 " + std::to_wstring(static_cast<int>(result.GetNumber("failCount", 0))) +
-                      L"，跳过 " + std::to_wstring(static_cast<int>(result.GetNumber("skipCount", 0)));
-            if (result.GetBool("reboot", false)) summary += L"\n有项目已排队到重启后执行。";
+            summary = ul::Tf(L"成功 %d，失败 %d，跳过 %d", L"%d succeeded, %d failed, %d skipped",
+                             static_cast<int>(result.GetNumber("okCount", 0)),
+                             static_cast<int>(result.GetNumber("failCount", 0)),
+                             static_cast<int>(result.GetNumber("skipCount", 0)));
+            if (result.GetBool("reboot", false)) summary += ul::T(L"\n有项目已排队到重启后执行。", L"\nSome items are queued to run after a reboot.");
 
             const ul::json::Value* results = result.Find("results");
             if (results && results->type == ul::json::Value::Type::Array) {
                 for (auto const& it : results->arr) {
                     if (it.GetBool("ok") && !it.GetBool("skipped")) continue;
                     if (detail.size() > 3000) break;
-                    detail += (it.GetBool("skipped") ? L"[跳过] " : L"[失败] ") +
+                    detail += (it.GetBool("skipped") ? ul::T(L"[跳过] ", L"[skipped] ") : ul::T(L"[失败] ", L"[failed] ")) +
                               ul::Utf8ToUtf16(it.GetString("path")) + L"\n";
                     const std::wstring rule = ul::Utf8ToUtf16(it.GetString("rule"));
-                    if (!rule.empty()) detail += L"    规则 " + rule + L"\n";
+                    if (!rule.empty()) detail += std::wstring(L"    ") + ul::T(L"规则 ", L"Rule ") + rule + L"\n";
                     const std::wstring msg = ul::Utf8ToUtf16(it.GetString("msg"));
                     if (!msg.empty()) detail += L"    " + msg + L"\n";
                 }
@@ -1124,7 +1210,7 @@ void MainWindow::StartOp(ul::IpcOp op, std::wstring arg) {
 void MainWindow::OnDragOver(IInspectable const&, DragEventArgs const& e) {
     if (e.DataView().Contains(Windows::ApplicationModel::DataTransfer::StandardDataFormats::StorageItems())) {
         e.AcceptedOperation(Windows::ApplicationModel::DataTransfer::DataPackageOperation::Link);
-        e.DragUIOverride().Caption(L"添加到 Unlocker");
+        e.DragUIOverride().Caption(ul::T(L"添加到 Unlocker", L"Add to Unlocker"));
         e.DragUIOverride().IsCaptionVisible(true);
     }
 }
@@ -1157,7 +1243,7 @@ void MainWindow::OnDeepScan(IInspectable const&, RoutedEventArgs const&) {
         targets.emplace_back(it.id, it.path);
     }
     if (targets.empty()) {
-        SetStatus(L"没有可扫描的项目");
+        SetStatus(ul::T(L"没有可扫描的项目", L"Nothing to scan"));
         return;
     }
     StartDeepScan(targets);
@@ -1177,7 +1263,7 @@ void MainWindow::OnCopy(IInspectable const&, RoutedEventArgs const&) {
 fire_and_forget MainWindow::OnRename(IInspectable const&, RoutedEventArgs const&) {
     auto sel = SelectedIndices();
     if (sel.empty()) {
-        ShowMessage(L"Unlocker", L"请先选中一个文件。");
+        ShowMessage(L"Unlocker", ul::T(L"请先选中一个文件。", L"Select a file first."));
         co_return;
     }
     auto const& target = items_[sel.front()];
@@ -1187,10 +1273,10 @@ fire_and_forget MainWindow::OnRename(IInspectable const&, RoutedEventArgs const&
     box.SelectAll();
     ContentDialog dlg;
     dlg.XamlRoot(RootGrid().XamlRoot());
-    dlg.Title(box_value(L"解锁并改名"));
+    dlg.Title(box_value(ul::T(L"解锁并改名", L"Unlock and rename")));
     dlg.Content(box);
-    dlg.PrimaryButtonText(L"改名");
-    dlg.CloseButtonText(L"取消");
+    dlg.PrimaryButtonText(ul::T(L"改名", L"Rename"));
+    dlg.CloseButtonText(ul::T(L"取消", L"Cancel"));
     dlg.DefaultButton(ContentDialogButton::Primary);
 
     auto result = co_await dlg.ShowAsync();
@@ -1198,7 +1284,7 @@ fire_and_forget MainWindow::OnRename(IInspectable const&, RoutedEventArgs const&
 
     std::wstring name = Ws(box.Text());
     if (name.empty() || name.find(L'\\') != std::wstring::npos) {
-        ShowMessage(L"Unlocker", L"新名称不能为空，也不能包含路径分隔符。");
+        ShowMessage(L"Unlocker", ul::T(L"新名称不能为空，也不能包含路径分隔符。", L"The new name can't be empty or contain a path separator."));
         co_return;
     }
     StartOp(ul::IpcOp::Rename, name);
@@ -1215,7 +1301,7 @@ void MainWindow::OnRescan(IInspectable const&, RoutedEventArgs const&) {
     }
     RebuildFileList();
     if (targets.empty()) return;
-    SetStatus(L"重新扫描中…");
+    SetStatus(ul::T(L"重新扫描中…", L"Rescanning…"));
     StartLocalScan(targets);
 }
 
@@ -1262,7 +1348,9 @@ void MainWindow::OnRemoveFromListAccelerator(
     RebuildProcessList();
     UpdateSummary();
     RefreshEmptyHint();
-    SetStatus(L"已从列表移除 " + std::to_wstring(sel.size()) + L" 项（磁盘上的文件没有改动）");
+    SetStatus(ul::Tf(L"已从列表移除 %d 项（磁盘上的文件没有改动）",
+                     L"Removed %d item(s) from the list (files on disk are untouched)",
+                     static_cast<int>(sel.size())));
 }
 
 }  // namespace winrt::Unlocker::implementation

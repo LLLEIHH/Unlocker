@@ -4,6 +4,7 @@
 #include "InitialPaths.h"
 
 #include "cli/CliMain.h"
+#include "common/Lang.h"
 #include "ipc/WorkerMain.h"
 #include "ui/UiIpc.h"
 
@@ -77,6 +78,9 @@ int __stdcall wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
 
     ul::SetInitialPaths(args);
     if (argv) LocalFree(argv);
+
+    // 语言：优先读用户上次的选择，没有就按系统首选 UI 语言判定（zh-* → 简中，其它 → 英文）
+    ul::LoadLangPreference();
 
     winrt::init_apartment(winrt::apartment_type::single_threaded);
     winrt::Unlocker::implementation::AppTrace(L"wWinMain: Application::Start 前");
