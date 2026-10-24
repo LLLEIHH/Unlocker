@@ -4,7 +4,7 @@
 
 纯用户态实现，**不加载内核驱动**；权限按「动作」分配，而不是整个窗口一直以管理员身份运行。
 
-**受IObitunlocker启发，使用DeepSeek V4.1 FLASH和GLM5.3完成，可能是狗*代码**
+**受IObit Unlocker启发，使用DeepSeek V4.1 FLASH和GLM5.3完成，可能是狗*代码**
 
 [![CI](https://github.com/LLLEIHH/Unlocker/actions/workflows/build.yml/badge.svg)](https://github.com/LLLEIHH/Unlocker/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
