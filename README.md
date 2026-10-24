@@ -195,3 +195,17 @@ build.cmd winui
 4. `HICON` 不参与 IPC（`ProcessInfo` 过不了管道），UI 侧要靠 `fullPath` 自己取图标；当前列表用文字状态，
    图标未接入。
 5. 黑名单规则表 CRC 只能防「改了规则忘了改 CRC」这类手滑，**不是防破解**；真正的完整性只能靠代码签名。
+
+## 八、版本控制
+
+仓库用 git 管理（`main` 分支）。几个约定，改 `.gitignore` 之前先看一眼：
+
+| 规则 | 原因 |
+| --- | --- |
+| 忽略 `/build/`、`/winui/build-winui*/` | 构建产物（约 2.4 GB），随时可再生 |
+| 忽略 `/winui/packages/` | NuGet 还原产物（428 MB），`build.cmd winui` 会自动重新下载 |
+| 忽略 `/.workbuddy/` | 开发期记忆与会话数据，不属于源码 |
+| 保留 `tools/nuget/nuget.exe` | 8.5 MB，但离线还原要靠它，属于工具链的一部分 |
+
+`.gitattributes` 里 **`*.cmd` / `*.bat` 强制 `eol=crlf`**：LF 的批处理在 cmd.exe 下会解析出错
+（`chcp 65001` 时还会吃中文字节）。仓库内统一存 LF，工作区按规则还原成 CRLF。
