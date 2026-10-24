@@ -1,0 +1,41 @@
+name: build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  win32:
+    name: Win32 + 单元测试
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 配置并构建
+        shell: cmd
+        run: build.cmd
+
+      - name: 单元测试（黑名单裁决 / 管道协议）
+        shell: cmd
+        run: |
+          build\Release\policy_tests.exe
+          if errorlevel 1 exit /b 1
+          build\Release\ipc_tests.exe
+          if errorlevel 1 exit /b 1
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: unlocker-win32
+          # Win32 版 + 单文件版 + 右键菜单扩展
+          path: |
+            build/Release/Unlocker.exe
+            build/Release/Unlocker-Portable.exe
+            build/Release/UnlockerShell.dll
+          if-no-files-found: error

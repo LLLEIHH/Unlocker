@@ -1,0 +1,54 @@
+name: release
+
+# 推 v* 标签时构建并发布；也可以手动跑一次，只产出 artifact 不发 Release。
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write     # gh release create 需要
+
+jobs:
+  portable:
+    name: 构建单文件版
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 单文件版的载荷来自 WinUI 输出目录，所以必须先编 WinUI，再编一次让 CMake 打包载荷。
+      - name: 构建 WinUI 3
+        shell: cmd
+        run: build.cmd winui
+
+      - name: 校验 WinUI 产物（PRI / XBF / 框架 DLL）
+        shell: cmd
+        run: python tools\check-winui-output.py winui\build-winui\x64\Release
+
+      - name: 构建并按入单文件版
+        shell: cmd
+        run: build.cmd
+
+      - name: 冒烟测试
+        shell: cmd
+        run: build\Release\policy_tests.exe
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: unlocker-portable
+          path: build/Release/Unlocker-Portable.exe
+          if-no-files-found: error
+
+      - name: 发布 Release（仅标签触发）
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          gh release create $tag `
+            "build/Release/Unlocker-Portable.exe" `
+            --title "Unlocker $tag" `
+            --generate-notes

@@ -45,11 +45,24 @@ dir /b build\Release\*.exe build\Release\*.dll 2>nul
 exit /b 0
 
 :winui
-rem 注意：XAML 编译管线实际来自 WindowsAppSDK NuGet 包（vcxproj 里有手写胶水层），
-rem 不依赖 VS 的 WindowsXaml 规则；目录缺失只影响提示，不阻塞构建。
+rem NOTE: the XAML compile pipeline comes from the WindowsAppSDK NuGet package (the vcxproj has a
+rem hand-written glue layer); it does not rely on VS WindowsXaml rules. A missing dir only warns.
+rem IMPORTANT: keep this file ASCII-only. Under a GBK console, a UTF-8 Chinese comment can swallow
+rem the trailing CR into a DBCS pair, which splits the line and runs its tail as a command.
 if not exist "%XAMLDIR%" echo [WARN] VS WindowsXaml rules missing (build still works, see winui/UnlockerApp.vcxproj glue notes)
 
 :have_xaml
+rem nuget.exe is an 8 MB binary and is not committed; download it on demand. Offline: drop it in.
+if exist "tools\nuget\nuget.exe" goto have_nuget
+echo [0/5] Downloading nuget.exe...
+if not exist "tools\nuget" mkdir "tools\nuget"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri 'https://dist.nuget.org/win-x86-commandline/latest/nuget.exe' -OutFile 'tools\nuget\nuget.exe'"
+if not exist "tools\nuget\nuget.exe" (
+    echo [ERROR] Failed to download nuget.exe. Put it at tools\nuget\nuget.exe manually and retry.
+    exit /b 1
+)
+
+:have_nuget
 if exist "winui\packages\Microsoft.WindowsAppSDK.1.7.251107005" goto have_wasdk
 echo [1/5] Restore Microsoft.WindowsAppSDK...
 tools\nuget\nuget.exe install Microsoft.WindowsAppSDK -Version 1.7.251107005 -OutputDirectory winui\packages -NonInteractive

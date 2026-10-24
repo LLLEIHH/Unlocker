@@ -1,0 +1,72 @@
+name: Bug 报告
+description: 报一个能复现的问题
+labels: [ "bug" ]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        谢谢你帮忙找问题。请尽量写清楚**怎么复现**——这个工具会删文件，没有复现步骤的话基本没法查。
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 现象
+      description: 发生了什么？期望是什么？
+      placeholder: 右键"解锁并删除"后文件还在，状态栏显示"成功 1"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 用 MakeLock.exe 锁住 D:\test\a.txt
+        2. 拖进 Unlocker
+        3. 点"解锁并删除"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: 用的哪个形态
+      options:
+        - Unlocker-Portable.exe（单文件版）
+        - WinUI 3 版（Unlocker.exe + 一堆文件）
+        - Win32 legacy 版
+        - 从源码自己编的
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: Release 标签，或 `Unlocker.exe --version` 的输出
+      placeholder: v0.8.0 / Unlocker v0.8 (x64, protocol v3)
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: 系统
+      placeholder: Windows 11 23H2 x64（150% 缩放）
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: 日志
+      description: 文件在 `%LOCALAPPDATA%\Unlocker\unlocker.log`，请贴最后 50 行左右
+      render: text
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 确认
+      options:
+        - label: 我确认这不是安全问题（安全漏洞请走 SECURITY.md 里的私下渠道）
+          required: true

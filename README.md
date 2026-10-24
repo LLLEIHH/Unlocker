@@ -1,7 +1,104 @@
-# Unlocker v0.8 — 实现说明
+# Unlocker
 
-按 `Unlocker-Execution-Plan.md`（v0.8，含两轮评审结论）落地的 C++20 / Win32 实现。
-纯用户态，不写内核驱动；权限按「动作」分配而不是按「窗口」分配。
+**Windows 文件占用解锁工具** —— 删不掉的文件夹、改不了名的文件、移动时提示"正被使用"？先看清楚是谁占着，再决定怎么解开。
+
+纯用户态实现，**不加载内核驱动**；权限按「动作」分配，而不是整个窗口一直以管理员身份运行。
+
+[![CI](https://github.com/LLLEIHH/unlocker/actions/workflows/build.yml/badge.svg)](https://github.com/LLLEIHH/unlocker/actions/workflows/build.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20x64-lightgrey)
+
+![Unlocker 界面](docs/screenshot-zh.png)
+
+<details>
+<summary>英文界面</summary>
+
+![English UI](docs/screenshot-en.png)
+
+</details>
+
+## 下载
+
+到 [Releases](../../releases/latest) 下载 **`Unlocker-Portable.exe`**（约 28 MB），双击即用：
+
+- **单文件**，不需要安装，不需要 VC++ 运行库
+- 首次运行自动解压到 `%LOCALAPPDATA%\Unlocker\App\<哈希>\`，之后直接复用
+- 想彻底卸载：删掉这个 exe 和上面那个目录即可，不写注册表（只存窗口位置和语言）
+
+## 能做什么
+
+| 能力 | 说明 |
+| --- | --- |
+| 找占用者 | 枚举系统句柄，直接告诉你是**哪个进程**、握着**几个句柄**、能不能安全释放 |
+| 8 种占用状态 | 可操作 / 已打开 / 已锁定 / 映像占用 / 权限不足 / 驱动锁定 / 不存在 / 无法访问 —— 状态不同，处理方式不同 |
+| 分级解锁 | L0 直接删 → L1 关句柄 → L2 结束进程 → L4 重启后删除，能低级别解决就绝不动用高级别 |
+| 安全操作 | 解锁后删除 / 改名 / 移动 / 复制，支持批量与递归目录 |
+| 黑名单兜底 | 系统关键路径、页面文件、注册表配置单元等**内置规则表**直接拒绝，`--force` 也绕不过 |
+| 中英双语 | 系统是中文（含港澳台）默认简中，否则英文；右上角 ZH/EN 随时切换 |
+| 深扫 | 普通权限看不到服务与受保护进程的占用，需要时再单独提权扫一遍 |
+
+## 安全模型（先说清楚，别踩坑）
+
+- **不加载驱动**：全部通过公开 Win32/NTAPI 完成，所以做不到"解锁一切"，比如被文件系统过滤驱动锁住的情况只能如实告诉你
+- **最小权限**：GUI 以普通权限启动（拖放和右键菜单才正常），只有真正写盘或深扫时才弹 UAC 拉起一个 worker
+- **黑名单不可关闭**：规则表带 CRC 自检，校验不过就直接进入 fail-closed（全表拒绝），宁可不干活也不误删
+- **单文件版的残余风险**：程序解压到用户可写的 `%LOCALAPPDATA%`，启动前会全量校验文件哈希，但同用户进程理论上仍能在校验后、提权前替换文件（TOCTOU）。这是"便携"换来的代价，正规安装到 `Program Files` 则没有这个问题
+
+## 两种构建形态
+
+| 形态 | 产物 | 说明 |
+| --- | --- | --- |
+| **WinUI 3**（当前交付 UI） | `Unlocker.exe` + 189 个文件 | 亚克力背景、原生标题栏、跟随系统深浅色；**WinUI 3 的 C++ 没有单文件模式**，所以另外打了单文件版 |
+| **单文件版** | `Unlocker-Portable.exe`（28 MB） | 自解压引导器，把上面那堆压成 27.5 MB 塞进资源里，首次运行释放 |
+| Win32（legacy） | `Unlocker.exe`（466 KB） | 最早的 Win32 界面，功能齐全但停止演进，保留给需要极小体积的场景 |
+
+## 从源码构建
+
+需要 **VS 2022**（Community 即可，含 C++ 工作负载）、**CMake ≥ 3.20**、**Windows SDK 10.0.26100**、Python 3。
+
+WinUI 版第一次构建会自动下载 `nuget.exe` 并还原 4 个包（约 430 MB），需要联网；
+离线环境请自行把 `nuget.exe` 放到 `tools/nuget/` 目录下（跳过下载的分支见 `build.cmd`）。
+
+```bat
+build.cmd            :: Win32 版 + 单元测试，产物在 build\Release\
+build.cmd winui      :: WinUI 3 版，产物在 winui\build-winui\x64\Release\
+```
+
+单文件版由 CMake 自动打包（`tools/make_bundle.py`），构建完在 `build\Release\Unlocker-Portable.exe`。
+
+跑测试：
+
+```bat
+build\Release\policy_tests.exe     :: 黑名单裁决、分级、三次确认
+build\Release\ipc_tests.exe        :: 管道协议、身份校验、超长帧
+```
+
+## 目录结构
+
+```
+src/core/      句柄扫描、占用判定、分级拆锁、文件操作、黑名单裁决（无 UI 无 IPC 依赖）
+src/ipc/       命名管道 + 提权 worker（三重身份校验）
+src/bundle/    单文件版引导器（自解压 + 完整性校验）
+winui/         WinUI 3 前端（唯一在演进 UI）
+src/ui/        Win32 版前端（legacy，已冻结）
+tools/         规则表 CRC 生成、图标生成、载荷打包、产物校验、开发期截图脚本
+docs/          截图与文档
+```
+
+## 贡献
+
+欢迎提 Issue 和 PR，先看 [CONTRIBUTING.md](CONTRIBUTING.md)。安全问题请走 [SECURITY.md](SECURITY.md)，不要开公开 issue。
+
+## 许可
+
+[MIT](LICENSE)。这是个会删文件的工具，请先在虚拟机或测试目录里试用。
+
+---
+
+# 实现细节
+
+> 以下是按 `Unlocker-Execution-Plan.md`（v0.8，含两轮评审结论）落地的施工记录，面向要改代码的人。
+> 设计取舍、踩过的坑、为什么这么写都记在这里。
 
 ## 一、已经能跑的部分
 
@@ -205,7 +302,7 @@ build.cmd winui
 | 忽略 `/build/`、`/winui/build-winui*/` | 构建产物（约 2.4 GB），随时可再生 |
 | 忽略 `/winui/packages/` | NuGet 还原产物（428 MB），`build.cmd winui` 会自动重新下载 |
 | 忽略 `/.workbuddy/` | 开发期记忆与会话数据，不属于源码 |
-| 保留 `tools/nuget/nuget.exe` | 8.5 MB，但离线还原要靠它，属于工具链的一部分 |
+| 忽略 `/tools/nuget/nuget.exe` | 8.5 MB 二进制，`build.cmd winui` 缺失时会自动下载 |
 
 `.gitattributes` 里 **`*.cmd` / `*.bat` 强制 `eol=crlf`**：LF 的批处理在 cmd.exe 下会解析出错
 （`chcp 65001` 时还会吃中文字节）。仓库内统一存 LF，工作区按规则还原成 CRLF。
