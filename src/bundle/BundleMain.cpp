@@ -10,7 +10,10 @@
 //   · 命名互斥量串行化解压：两个实例同时双击也不会写坏同一份目录
 //   · 解压完清理旧版本目录（只保留当前哈希），避免每次升级白占 60MB
 //   · 转发命令行参数并等待子进程，退出码原样返回（CLI / --worker 都靠这条）
+//   · 每次启动校验已解压文件的 FNV 哈希，对不上就重新解压（自愈 + 防篡改）
+//   · 解压目录写显式 DACL（断开父目录继承），只留 当前用户 / SYSTEM / Administrators
 #include <windows.h>
+#include <aclapi.h>
 #include <compressapi.h>
 
 #include <string>
@@ -92,6 +95,7 @@ struct Entry {
     std::wstring name;
     uint64_t rawSize = 0;
     uint64_t compSize = 0;
+    uint64_t hash = 0;      // FNV-1a 64，启动前用来校验已解压文件
 };
 
 struct Payload {
@@ -124,7 +128,7 @@ bool Decompress(uint32_t algo, BYTE const* in, size_t inLen, BYTE* out, size_t o
 }
 
 bool ParsePayload(Payload& pl) {
-    static const char kMagic[8] = { 'U', 'L', 'K', 'P', 'A', 'K', '1', '\0' };
+    static const char kMagic[8] = { 'U', 'L', 'K', 'P', 'A', 'K', '2', '\0' };
     if (memcmp(pl.data, kMagic, 8) != 0) return false;
 
     Cursor head{ pl.data, pl.size };
@@ -153,7 +157,7 @@ bool ParsePayload(Payload& pl) {
         if (!c.Take(name.data(), static_cast<size_t>(nameLen) * sizeof(wchar_t))) return false;
         Entry e;
         e.name = std::move(name);
-        if (!c.Num(e.rawSize) || !c.Num(e.compSize)) return false;
+        if (!c.Num(e.rawSize) || !c.Num(e.compSize) || !c.Num(e.hash)) return false;
         pl.entries.push_back(std::move(e));
     }
 
@@ -211,6 +215,92 @@ std::wstring PayloadHash(BYTE const* data, size_t size) {
     return buf;
 }
 
+bool HashFile(std::wstring const& path, uint64_t& hash, uint64_t& size) {
+    HANDLE f = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                           OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+    if (f == INVALID_HANDLE_VALUE) return false;
+
+    uint64_t h = 1469598103934665603ull;
+    uint64_t total = 0;
+    BYTE buf[64 * 1024];
+    DWORD got = 0;
+    while (ReadFile(f, buf, sizeof(buf), &got, nullptr) && got > 0) {
+        for (DWORD i = 0; i < got; ++i) {
+            h ^= buf[i];
+            h *= 1099511628211ull;
+        }
+        total += got;
+    }
+    CloseHandle(f);
+    hash = h;
+    size = total;
+    return true;
+}
+
+// 逐个文件比对载荷里记录的哈希；任何缺失/改动都视为需要重新解压
+bool VerifyExtracted(Payload const& pl, std::wstring const& dir) {
+    for (auto const& e : pl.entries) {
+        std::wstring rel = e.name;
+        for (auto& ch : rel) {
+            if (ch == L'/') ch = L'\\';
+        }
+        uint64_t hash = 0;
+        uint64_t size = 0;
+        if (!HashFile(Join(dir, rel), hash, size)) return false;
+        if (size != e.rawSize || hash != e.hash) return false;
+    }
+    return true;
+}
+
+// 给解压目录写一份显式 DACL 并断开继承：父目录（%LOCALAPPDATA%）被人为放宽时，
+// 这里不会被顺带放宽。当前用户仍保留完全控制，否则自己升级时删不掉旧版本。
+bool HardenDirAcl(std::wstring const& dir) {
+    HANDLE token = nullptr;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return false;
+    DWORD len = 0;
+    GetTokenInformation(token, TokenUser, nullptr, 0, &len);
+    std::vector<BYTE> buf(len);
+    const bool got = GetTokenInformation(token, TokenUser, buf.data(), len, &len) != FALSE;
+    CloseHandle(token);
+    if (!got) return false;
+    PSID userSid = reinterpret_cast<TOKEN_USER*>(buf.data())->User.Sid;
+
+    SID_IDENTIFIER_AUTHORITY nt = SECURITY_NT_AUTHORITY;
+    PSID systemSid = nullptr;
+    PSID adminsSid = nullptr;
+    if (!AllocateAndInitializeSid(&nt, 1, SECURITY_LOCAL_SYSTEM_RID, 0, 0, 0, 0, 0, 0, 0, &systemSid)) {
+        return false;
+    }
+    if (!AllocateAndInitializeSid(&nt, 2, SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS, 0, 0,
+                                  0, 0, 0, 0, &adminsSid)) {
+        FreeSid(systemSid);
+        return false;
+    }
+
+    PSID sids[3] = { userSid, systemSid, adminsSid };
+    EXPLICIT_ACCESS_W entries[3]{};
+    for (int i = 0; i < 3; ++i) {
+        entries[i].grfAccessPermissions = GENERIC_ALL;
+        entries[i].grfAccessMode = SET_ACCESS;
+        entries[i].grfInheritance = SUB_CONTAINERS_AND_OBJECTS_INHERIT;
+        entries[i].Trustee.TrusteeForm = TRUSTEE_IS_SID;
+        entries[i].Trustee.TrusteeType = TRUSTEE_IS_UNKNOWN;
+        entries[i].Trustee.ptstrName = static_cast<LPWSTR>(sids[i]);
+    }
+
+    PACL acl = nullptr;
+    bool ok = SetEntriesInAclW(3, entries, nullptr, &acl) == ERROR_SUCCESS;
+    if (ok) {
+        ok = SetNamedSecurityInfoW(const_cast<LPWSTR>(dir.c_str()), SE_FILE_OBJECT,
+                                   DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                                   nullptr, nullptr, acl, nullptr) == ERROR_SUCCESS;
+        LocalFree(acl);
+    }
+    FreeSid(systemSid);
+    FreeSid(adminsSid);
+    return ok;
+}
+
 std::wstring LocalAppData() {
     wchar_t buf[MAX_PATH * 2]{};
     const DWORD n = GetEnvironmentVariableW(L"LOCALAPPDATA", buf, ARRAYSIZE(buf));
@@ -250,6 +340,11 @@ std::wstring BuildCommandLine(std::wstring const& exe) {
 }  // namespace
 
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
+    // 从控制台启动时附加到父控制台：引导器是 GUI 子系统、默认没有控制台，
+    // 不附加的话内层 exe 的 AttachConsole(ATTACH_PARENT_PROCESS) 会失败，CLI 输出就没了。
+    // 子进程会继承这个控制台关联，所以 --status / --list 等参数才有输出。
+    AttachConsole(ATTACH_PARENT_PROCESS);
+
     wchar_t selfPath[MAX_PATH * 2]{};
     GetModuleFileNameW(nullptr, selfPath, ARRAYSIZE(selfPath));
     std::wstring selfDir = selfPath;
@@ -268,15 +363,24 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     const std::wstring targetDir = Join(appRoot, hash);
     const std::wstring exePath = Join(targetDir, L"Unlocker.exe");
 
-    if (!FileExists(exePath) || !FileExists(targetDir + kReadyMarker)) {
+    // 每次启动都校验：文件缺失、被改、被截断都会触发重新解压（自愈）
+    const bool needExtract = !FileExists(exePath) || !FileExists(targetDir + kReadyMarker) ||
+                             !VerifyExtracted(pl, targetDir);
+
+    if (needExtract) {
         // 串行化解压；拿到锁之后再查一次，避免两个实例重复干活
         HANDLE mutex = CreateMutexW(nullptr, FALSE, L"Local\\Unlocker.Bundle.Extract");
         if (mutex) WaitForSingleObject(mutex, 120000);
 
-        if (!FileExists(exePath) || !FileExists(targetDir + kReadyMarker)) {
+        if (!FileExists(exePath) || !FileExists(targetDir + kReadyMarker) ||
+            !VerifyExtracted(pl, targetDir)) {
             const std::wstring tempDir = targetDir + L".tmp";
             DeleteTree(tempDir);
             EnsureDir(tempDir);
+            if (!HardenDirAcl(tempDir)) {
+                // 收紧失败不阻断启动，但要留下痕迹便于排查
+                OutputDebugStringW(L"UnlockerBundle: 设置目录 ACL 失败\n");
+            }
 
             if (!ExtractAll(pl, tempDir)) {
                 if (mutex) { ReleaseMutex(mutex); CloseHandle(mutex); }
@@ -314,7 +418,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     std::vector<wchar_t> mutableCmd(cmd.begin(), cmd.end());
     mutableCmd.push_back(L'\0');
 
-    if (!CreateProcessW(exePath.c_str(), mutableCmd.data(), nullptr, nullptr, FALSE, 0, nullptr,
+    // bInheritHandles=TRUE：让内层进程继承控制台句柄（CLI 输出依赖这条）
+    if (!CreateProcessW(exePath.c_str(), mutableCmd.data(), nullptr, nullptr, TRUE, 0, nullptr,
                         workDir.c_str(), &si, &pi)) {
         Fail(L"启动 Unlocker 失败（错误码 " + std::to_wstring(GetLastError()) + L"）。\n\n"
              L"Failed to start Unlocker.");

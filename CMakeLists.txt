@@ -127,15 +127,15 @@ if(UNLOCKER_BUILD_APP AND Python3_Interpreter_FOUND)
     file(TO_NATIVE_PATH "${BUNDLE_PAYLOAD}" BUNDLE_PAYLOAD_NATIVE)
     string(REPLACE "\\" "\\\\" BUNDLE_PAYLOAD_RC "${BUNDLE_PAYLOAD_NATIVE}")
 
-    add_custom_command(
-        OUTPUT "${BUNDLE_PAYLOAD}"
+    # 每次构建都跑一次（脚本内部比内容，没变化就不落盘，不会引起重编）——
+    # 用 add_custom_command(OUTPUT) 的话「输出已存在」就永久跳过，改了 UI 还发旧界面。
+    add_custom_target(bundle_payload ALL
         COMMAND ${CMAKE_COMMAND} -E make_directory "${BUNDLE_DIR}"
         COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/make_bundle.py"
                 --src "${CMAKE_CURRENT_SOURCE_DIR}/winui/build-winui/x64/Release"
                 --out "${BUNDLE_PAYLOAD}"
         COMMENT "打包 WinUI 载荷（单文件版）"
         VERBATIM)
-    add_custom_target(bundle_payload DEPENDS "${BUNDLE_PAYLOAD}")
 
     # 资源脚本里的载荷路径是绝对路径，所以按配置生成一份到 build 目录
     configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/bundle/Bundle.rc.in"
@@ -145,7 +145,7 @@ if(UNLOCKER_BUILD_APP AND Python3_Interpreter_FOUND)
         src/bundle/BundleMain.cpp
         "${BUNDLE_DIR}/Bundle.rc")
     add_dependencies(UnlockerBundle bundle_payload)
-    target_link_libraries(UnlockerBundle PRIVATE cabinet)
+    target_link_libraries(UnlockerBundle PRIVATE cabinet advapi32)
     # 静态 CRT：成品不依赖 VC++ 运行库，拷到任何 Win10/11 x64 都能直接双击
     set_property(TARGET UnlockerBundle PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
     set_target_properties(UnlockerBundle PROPERTIES OUTPUT_NAME "Unlocker-Portable")

@@ -258,9 +258,11 @@ unlocker/Unlocker-Portable.exe          # 29 MB，单文件，拷到哪都能双
 | 项 | 说明 |
 | --- | --- |
 | 体积 | 62.1 MB → **27.5 MB**（XPRESS_HUFF，2.26x） |
-| 依赖 | 只有 `Cabinet.dll` / `KERNEL32` / `USER32` —— **静态 CRT，不需要 VC++ 运行库** |
-| 首次运行 | 解压约 3~5 秒，之后写 `ready.tag` |
-| 再次运行 | **0.5 秒**出窗口（命中缓存，不重复解压） |
+| 依赖 | 只有 `Cabinet` / `ADVAPI32` / `KERNEL32` / `USER32` —— **静态 CRT，不需要 VC++ 运行库** |
+| 首次运行 | 解压约 **0.5 秒**（62 MB 解压 + 落盘），之后写 `ready.tag` |
+| 再次运行 | 0.7 秒（其中 ~0.5 秒是启动前的完整性校验，见下） |
+| 完整性校验 | 每次启动重算全部 275 个文件的 FNV-1a 64，与载荷里的记录比对；对不上就重新解压（自愈） |
+| 目录 ACL | 解压目录写**显式 DACL 并断开父目录继承**（只留 当前用户 / SYSTEM / Administrators），父目录被放宽也波及不到 |
 | 升级 | 载荷哈希变了就落到新目录，旧版本自动清理，不会越用越大 |
 | 并发 | 命名互斥量 `Local\Unlocker.Bundle.Extract` 串行化解压 |
 | 命令行 | 参数原样转发给内层 exe，退出码原样返回（CLI / `--worker` 都靠这条） |
@@ -276,5 +278,15 @@ unlocker/Unlocker-Portable.exe          # 29 MB，单文件，拷到哪都能双
 build.cmd            :: 走 CMake，会自动先跑 tools/make_bundle.py 生成载荷
 ```
 
-产物 `build\Release\Unlocker-Portable.exe`。注意 `make_bundle.py` 打包的是
-`winui\build-winui\x64\Release`，所以要先 `build.cmd winui`，否则载荷里是旧 UI。
+产物 `build\Release\Unlocker-Portable.exe`。
+
+`make_bundle.py` 打包的是 `winui\build-winui\x64\Release`，所以**每次构建都会重跑打包**
+（`add_custom_target(... ALL)`）—— 用 `add_custom_command(OUTPUT)` 的话「输出已存在」会永久跳过，
+改了 UI 还发旧界面。脚本内部比内容，没变化就不落盘，因此重复构建不会白白重编 29 MB 资源。
+
+### 残余风险（说清楚，不粉饰）
+
+单文件版把 exe 解到 `%LOCALAPPDATA%` —— **用户可写目录**，而程序会从这里拉起需要 UAC 提权的 worker。
+启动前的哈希校验能挡住「文件被改/被截断」，但挡不住同用户进程在校验之后、提权之前替换文件（TOCTOU）。
+真正的边界是「同一个用户本来就完全控制自己的 `%LOCALAPPDATA%`」，任何 ACL 都改不了这一点。
+要彻底消除，只能不把提权目标放在用户可写目录（例如正规安装到 `Program Files` 用固定路径）。

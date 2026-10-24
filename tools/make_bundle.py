@@ -13,7 +13,10 @@
 TOC（解压后）：
 
     u32 count
-    repeat: u16 nameLen, wchar16 name[nameLen], u64 rawSize, u64 compSize
+    repeat: u16 nameLen, wchar16 name[nameLen], u64 rawSize, u64 compSize, u64 fnv1a64
+
+`fnv1a64` 是原始文件内容的哈希，引导器每次启动前会重新算一遍，被改动就自动重新解压。
+（不是安全边界：同用户进程本来就能改这些文件，但能挡住「文件被改坏了还照旧运行」。）
 
 压缩用 Windows 自带的 CompressAPI（cabinet.dll）。选它是因为**生产端和消费端用同一个 API**，
 不存在「自己拼压缩流格式」的坑（MSZIP 的块头格式就不是能猜出来的）。本机无 zlib 可链，
@@ -35,7 +38,7 @@ from pathlib import Path
 
 COMPRESS_ALGORITHM_XPRESS_HUFF = 4  # compressapi.h
 
-MAGIC = b"ULKPAK1\0"
+MAGIC = b"ULKPAK2\0"   # v2：TOC 每条多一个 FNV-1a 64，用于启动前校验文件完整性
 # 这些是调试/中间产物，分发不需要
 SKIP_SUFFIX = {".pdb", ".ilk", ".exp", ".lib", ".xml"}
 SKIP_DIRS = {"obj"}
@@ -62,6 +65,13 @@ def compress(dll, data: bytes, algo: int = COMPRESS_ALGORITHM_XPRESS_HUFF) -> by
         return out.raw[:n.value]
     finally:
         dll.CloseCompressor(h)
+
+
+def fnv1a64(data: bytes) -> int:
+    h = 1469598103934665603
+    for b in data:
+        h = ((h ^ b) * 1099511628211) & 0xFFFFFFFFFFFFFFFF
+    return h
 
 
 def collect(src: Path) -> list[Path]:
@@ -103,7 +113,8 @@ def main() -> int:
         rel = p.relative_to(src).as_posix()
         blob = compress(dll, data)
         name = rel.encode("utf-16-le")
-        toc += struct.pack("<H", len(name) // 2) + name + struct.pack("<QQ", len(data), len(blob))
+        toc += (struct.pack("<H", len(name) // 2) + name
+                + struct.pack("<QQQ", len(data), len(blob), fnv1a64(data)))
         blobs.append(blob)
         raw_total += len(data)
         comp_total += len(blob)
@@ -111,13 +122,21 @@ def main() -> int:
     toc_comp = compress(dll, bytes(toc))
 
     out.parent.mkdir(parents=True, exist_ok=True)
-    with out.open("wb") as f:
-        f.write(MAGIC)
-        f.write(struct.pack("<IIQQ", COMPRESS_ALGORITHM_XPRESS_HUFF, len(files),
-                            len(toc_comp), len(toc)))
-        f.write(toc_comp)
-        for blob in blobs:
-            f.write(blob)
+
+    # 先拼到内存，内容一模一样就不落盘：否则每次构建都会刷新 mtime，
+    # rc.exe 会白重编一次 29MB 的资源、链接器再白链一次。
+    body = bytearray()
+    body += MAGIC
+    body += struct.pack("<IIQQ", COMPRESS_ALGORITHM_XPRESS_HUFF, len(files), len(toc_comp), len(toc))
+    body += toc_comp
+    for blob in blobs:
+        body += blob
+
+    if out.exists() and out.read_bytes() == bytes(body):
+        print(f"载荷无变化，跳过写入（{len(body) / 1048576:.1f} MB）")
+        return 0
+
+    out.write_bytes(bytes(body))
 
     size = out.stat().st_size
     print(f"原始 {raw_total / 1048576:.1f} MB → 载荷 {size / 1048576:.1f} MB"

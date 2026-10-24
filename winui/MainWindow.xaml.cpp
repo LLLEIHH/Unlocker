@@ -433,11 +433,28 @@ void MainWindow::ApplyLanguage() {
     // 语言按钮显示「当前语言」：ZH / EN
     LangText().Text(ul::GetLang() == ul::Lang::En ? L"EN" : L"ZH");
 
-    // 状态栏 + 列表（状态徽章、占用者、汇总都跟着重算）
-    SetStatus(elevated_ ? ul::T(L"执行组件：运行中（管理员权限 UI）", L"Worker: running (elevated UI)")
-                        : ul::T(L"执行组件：未启动（首次写操作时会请求管理员权限）",
-                                L"Worker: not started (elevation is requested on first write)"));
+    // 状态栏：只在空闲时改。扫描或操作进行中切语言，不能把进度文字（如「处理中 3/10」）冲掉
+    bool scanning = false;
+    for (auto const& item : items_) {
+        if (item.scanning && !item.scanned) {
+            scanning = true;
+            break;
+        }
+    }
+    if (!busy_ && !scanning) {
+        SetStatus(elevated_ ? ul::T(L"执行组件：运行中（管理员权限 UI）", L"Worker: running (elevated UI)")
+                            : ul::T(L"执行组件：未启动（首次写操作时会请求管理员权限）",
+                                    L"Worker: not started (elevation is requested on first write)"));
+    }
+
+    // 重建列表会清空 Items（选中项跟着没），所以先记下选中位置再恢复
+    const std::vector<size_t> selected = SelectedIndices();
     RebuildFileList();
+    for (size_t index : selected) {
+        if (index < rows_.size()) {
+            FileList().SelectedItems().Append(rows_[index]);
+        }
+    }
 }
 
 void MainWindow::SetupWindow() {
