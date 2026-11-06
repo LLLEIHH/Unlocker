@@ -29,6 +29,10 @@ struct HandleOwner {
     HANDLE      handleValue   = nullptr;
     ULONG       grantedAccess = 0;
     bool        isImageMapping = false;
+    // 非空 = 命中的是子项（目录目标的子树扫描）。重命名/删除目录时，只要子树里有
+    // 任何一个对象被打开，MoveFile / RemoveDirectory 都会返回 ACCESS_DENIED，
+    // 光看目录自身的 DELETE 权限会漏判——见 Scan 里的 subtreeLocked。
+    std::wstring viaPath;
 };
 
 struct FileReport {
@@ -40,6 +44,8 @@ struct FileReport {
     bool                      directory = false;
     bool                      needElevation = false;   // L1 遇到 AccessDenied / 高 IL 进程
     int                       totalFileHandles = 0;
+    bool                      subtreeLocked = false;   // 目录自身可操作，但子树内有占用（改名/删除会被拒）
+    int                       descendantHandles = 0;   // 命中子项的句柄数（owners 里 viaPath 非空的个数）
     std::vector<HandleOwner>  owners;
     std::vector<DWORD>        skippedPids;             // OpenProcess 失败且持有文件句柄的进程
 };
@@ -63,10 +69,13 @@ public:
                            const ProgressFn& progress = nullptr,
                            std::atomic<bool>* cancel = nullptr);
 
-    // 只取占用者（关句柄用），不做状态判定
+    // 只取占用者（关句柄用），不做状态判定。
+    // includeDescendants=true 时命中也算：「路径等于目标」或「路径以 目标\ 开头」，
+    // 命中子项的 owner.viaPath 会填成该子项的完整路径。
     static std::vector<HandleOwner> FindOwners(const std::wstring& path,
                                                std::vector<DWORD>* skippedPids,
-                                               std::atomic<bool>* cancel = nullptr);
+                                               std::atomic<bool>* cancel = nullptr,
+                                               bool includeDescendants = false);
 
     static bool IsImageMappedBy(const std::wstring& canonical,
                                 const std::vector<DWORD>& pids);

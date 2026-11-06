@@ -26,10 +26,12 @@ public:
     // 清只读属性（Level 0 的前置）
     static bool ClearReadOnly(const std::wstring& path);
 
-    // Level 2：关闭远程句柄。返回成功关闭的句柄数
+    // Level 2：关闭远程句柄。返回成功关闭的句柄数。
+    // includeDescendants：目录目标的子树（改名前必须先松开子项，否则 MoveFile 必失败）
     static int CloseHandlesForPath(const std::wstring& path, int rounds = 3,
                                    std::vector<DWORD>* touchedPids = nullptr,
-                                   DWORD* lastError = nullptr);
+                                   DWORD* lastError = nullptr,
+                                   bool includeDescendants = false);
 
     static bool CloseRemoteHandle(DWORD pid, HANDLE hRemote);
 

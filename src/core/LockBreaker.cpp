@@ -74,13 +74,14 @@ bool LockBreaker::CloseRemoteHandle(DWORD pid, HANDLE hRemote) {
 }
 
 int LockBreaker::CloseHandlesForPath(const std::wstring& path, int rounds,
-                                     std::vector<DWORD>* touchedPids, DWORD* lastError) {
+                                     std::vector<DWORD>* touchedPids, DWORD* lastError,
+                                     bool includeDescendants) {
     int closed = 0;
     if (lastError) *lastError = ERROR_SUCCESS;
 
     for (int round = 0; round < rounds; ++round) {
         std::vector<DWORD> skipped;
-        auto owners = HandleScanner::FindOwners(path, &skipped, nullptr);
+        auto owners = HandleScanner::FindOwners(path, &skipped, nullptr, includeDescendants);
         if (owners.empty()) break;
 
         int closedThisRound = 0;

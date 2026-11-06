@@ -166,6 +166,12 @@ add_executable(policy_tests tests/policy_tests.cpp)
 target_link_libraries(policy_tests PRIVATE unlocker_core)
 set_target_properties(policy_tests PROPERTIES OUTPUT_NAME "policy_tests")
 
+# 子树占用回归（依赖 MakeLock.exe 当跨进程锁源，两者必须同目录）
+add_executable(subtree_tests tests/subtree_tests.cpp)
+target_link_libraries(subtree_tests PRIVATE unlocker_core)
+add_dependencies(subtree_tests MakeLock)
+set_target_properties(subtree_tests PROPERTIES OUTPUT_NAME "subtree_tests")
+
 if(UNLOCKER_BUILD_APP)
     add_executable(ipc_tests tests/ipc_tests.cpp)
     target_link_libraries(ipc_tests PRIVATE unlocker_core)
@@ -175,6 +181,7 @@ endif()
 
 enable_testing()
 add_test(NAME policy_tests COMMAND policy_tests)
+add_test(NAME subtree_tests COMMAND subtree_tests)
 
 if(UNLOCKER_BUILD_APP)
     install(TARGETS Unlocker MakeLock UnlockerShell RUNTIME DESTINATION .)

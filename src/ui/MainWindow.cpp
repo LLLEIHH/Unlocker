@@ -49,9 +49,19 @@ constexpr UINT WM_APP_SCAN_DONE = WM_APP + 2;
 constexpr UINT WM_APP_OP_DONE   = WM_APP + 3;
 constexpr UINT WM_APP_STATUS    = WM_APP + 4;
 
+// 子项路径缩写：只留相对目标的那一段，列表里才放得下
+std::wstring RelativeToCanonical(const std::wstring& full, const std::wstring& base) {
+    if (!full.empty() && !base.empty() && full.size() > base.size() + 1 &&
+        _wcsnicmp(full.c_str(), base.c_str(), base.size()) == 0 && full[base.size()] == L'\\') {
+        return full.substr(base.size() + 1);
+    }
+    return full;
+}
+
 struct UiOwner {
     DWORD        pid = 0;
     std::wstring name, desc, fullPath;
+    std::wstring via;          // 命中的子项路径（目录目标的子树占用）
     int          handles = 1;
     bool         prot = false;
     bool         image = false;
@@ -263,7 +273,12 @@ void RefreshProcessList() {
         for (const auto& o : it->owners) {
             bool found = false;
             for (auto& m : merged) {
-                if (m.pid == o.pid) { m.handles += o.handles; found = true; break; }
+                if (m.pid == o.pid) {
+                    m.handles += o.handles;
+                    if (m.via.empty()) m.via = o.via;
+                    found = true;
+                    break;
+                }
             }
             if (!found) merged.push_back(o);
         }
@@ -277,12 +292,14 @@ void RefreshProcessList() {
         lv.pszText = const_cast<wchar_t*>(o.name.c_str());
         ListView_InsertItem(g.listProcs, &lv);
         ListView_SetItemText(g.listProcs, row, 1, const_cast<wchar_t*>(std::to_wstring(o.pid).c_str()));
-        ListView_SetItemText(g.listProcs, row, 2,
-                             const_cast<wchar_t*>((o.desc.empty() ? L"—" : o.desc).c_str()));
+        std::wstring descCol = o.desc.empty() ? L"—" : o.desc;
+        if (!o.via.empty()) descCol += L"（占用子项 " + o.via + L"）";
+        ListView_SetItemText(g.listProcs, row, 2, const_cast<wchar_t*>(descCol.c_str()));
         ListView_SetItemText(g.listProcs, row, 3,
                              const_cast<wchar_t*>((std::wstring(L"×") + std::to_wstring(o.handles)).c_str()));
         const bool prot = o.prot;
-        const std::wstring status = prot ? L"受保护" : (o.image ? L"映射" : L"占用");
+        const std::wstring status = prot ? L"受保护"
+                                        : (o.image ? L"映射" : (o.via.empty() ? L"占用" : L"子项占用"));
         ListView_SetItemText(g.listProcs, row, 4, const_cast<wchar_t*>(status.c_str()));
         ++row;
     }
@@ -366,6 +383,7 @@ void StartLocalScan(const std::vector<std::pair<uint64_t, std::wstring>>& target
                 uo.handles = ow.proc.handleCount;
                 uo.prot = ow.proc.protectedProc;
                 uo.image = ow.isImageMapping;
+                uo.via = RelativeToCanonical(ow.viaPath, rep.canonical);
                 it.owners.push_back(std::move(uo));
             }
             PostScanItem(id, it, rep.state == OccupancyState::NotFound);
@@ -453,6 +471,7 @@ void StartDeepScan(const std::vector<std::pair<uint64_t, std::wstring>>& targets
                         uo.handles = static_cast<int>(ow.GetNumber("handles", 1));
                         uo.prot = ow.GetBool("protected");
                         uo.image = ow.GetBool("image");
+                        uo.via = RelativeToCanonical(Utf8ToUtf16(ow.GetString("via")), it.canonical);
                         it.owners.push_back(std::move(uo));
                     }
                 }

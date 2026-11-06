@@ -120,7 +120,7 @@ DeleteOutcome DeleteOne(const std::wstring& path, bool isDir, const ApplyOptions
     {
         std::vector<DWORD> pids;
         DWORD closeErr = 0;
-        int closed = LockBreaker::CloseHandlesForPath(path, 3, &pids, &closeErr);
+        int closed = LockBreaker::CloseHandlesForPath(path, 3, &pids, &closeErr, isDir);
         if (closed > 0) {
             for (DWORD pid : pids) {
                 for (auto& s : LockBreaker::DescribeProcesses({pid})) out.owners.push_back(s);
@@ -141,7 +141,7 @@ DeleteOutcome DeleteOne(const std::wstring& path, bool isDir, const ApplyOptions
     // Level 4：终止持有进程（强制模式）
     if (opts.force) {
         std::vector<DWORD> skipped;
-        auto owners = HandleScanner::FindOwners(path, &skipped, nullptr);
+        auto owners = HandleScanner::FindOwners(path, &skipped, nullptr, isDir);
         std::set<DWORD> pids;
         for (const auto& o : owners) pids.insert(o.proc.pid);
 
@@ -404,13 +404,19 @@ BatchResult FileOps::Unlock(const std::vector<std::wstring>& paths, const ApplyO
 
         std::vector<DWORD> pids;
         DWORD err = 0;
-        int closed = LockBreaker::CloseHandlesForPath(p, 3, &pids, &err);
+        // 解锁目录时连子树一起松：挡住改名/删除的往往就是文件夹里被打开的那个文件
+        const DWORD uAttr = GetFileAttributesW(p.c_str());
+        const bool  uIsDir = uAttr != INVALID_FILE_ATTRIBUTES && (uAttr & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        int closed = LockBreaker::CloseHandlesForPath(p, 3, &pids, &err, uIsDir);
         r.closedHandles = closed;
         r.ok = true;
         r.level = 2;
-        r.message = closed > 0
-                        ? (L"已关闭 " + std::to_wstring(closed) + L" 个句柄")
-                        : L"没有找到可关闭的句柄";
+        if (closed > 0) {
+            r.message = L"已关闭 " + std::to_wstring(closed) + L" 个句柄";
+            if (uIsDir) r.message += L"（含目录内的子项）";
+        } else {
+            r.message = L"没有找到可关闭的句柄";
+        }
         for (auto& s : LockBreaker::DescribeProcesses(pids)) r.owners.push_back(s);
         batch.items.push_back(r);
     }
@@ -477,6 +483,18 @@ BatchResult FileOps::Rename(const std::wstring& path, const std::wstring& newNam
     const size_t slash = norm.find_last_of(L'\\');
     const std::wstring dest = (slash == std::wstring::npos ? std::wstring() : norm.substr(0, slash + 1)) + newName;
 
+    // 目录改名会连带检查整棵子树：子项里有任何打开的对象都会被拒，所以这里必须走子树模式
+    const DWORD attr = GetFileAttributesW(norm.c_str());
+    const bool  isDir = attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY) != 0;
+
+    auto describeOwners = [&r](const std::vector<HandleOwner>& owners) {
+        std::set<DWORD> pids;
+        for (const auto& o : owners) pids.insert(o.proc.pid);
+        for (DWORD pid : pids) {
+            for (auto& s : LockBreaker::DescribeProcesses({pid})) r.owners.push_back(s);
+        }
+    };
+
     DWORD lastErr = 0;
     for (int attempt = 0; attempt < 3; ++attempt) {
         if (MoveFileExW(norm.c_str(), dest.c_str(), 0)) {
@@ -487,10 +505,18 @@ BatchResult FileOps::Rename(const std::wstring& path, const std::wstring& newNam
         }
         lastErr = GetLastError();
         if (attempt == 0) {
-            LockBreaker::CloseHandlesForPath(norm, 3, nullptr, nullptr);
+            std::vector<DWORD> pids;
+            r.closedHandles = LockBreaker::CloseHandlesForPath(norm, 3, &pids, nullptr, isDir);
+            if (r.closedHandles > 0) {
+                r.level = 2;
+                std::set<DWORD> uniq(pids.begin(), pids.end());
+                for (DWORD pid : uniq) {
+                    for (auto& s : LockBreaker::DescribeProcesses({pid})) r.owners.push_back(s);
+                }
+            }
         } else if (attempt == 1 && opts.force) {
             std::vector<DWORD> skipped;
-            for (const auto& o : HandleScanner::FindOwners(norm, &skipped, nullptr)) {
+            for (const auto& o : HandleScanner::FindOwners(norm, &skipped, nullptr, isDir)) {
                 std::wstring msg;
                 LockBreaker::KillProcess(o.proc.pid, true, &msg);
                 r.owners.push_back(msg);
@@ -509,6 +535,12 @@ BatchResult FileOps::Rename(const std::wstring& path, const std::wstring& newNam
             r.code = lastErr;
             r.level = r.level < 0 ? 2 : r.level;
             r.message = L"改名失败：" + ErrorWithCode(lastErr);
+            if (r.owners.empty()) describeOwners(HandleScanner::FindOwners(norm, nullptr, nullptr, isDir));
+            if (isDir && lastErr == ERROR_ACCESS_DENIED && !r.owners.empty()) {
+                r.message += L"。目录内的子项仍被占用，改名会连带失败，请先释放上面列出的进程";
+            } else if (isDir && lastErr == ERROR_ACCESS_DENIED) {
+                r.message += L"。目录本身没有被占用，可能是 ACL 或文件系统过滤驱动拦截";
+            }
         }
     }
     batch.items.push_back(r);
@@ -558,18 +590,22 @@ BatchResult FileOps::Move(const std::vector<std::wstring>& paths, const std::wst
         const std::wstring src = PathResolver::Normalize(p);
         const std::wstring dst = JoinPath(destDir, BaseName(src));
 
+        const DWORD srcAttr = GetFileAttributesW(src.c_str());
+        const bool  srcIsDir = srcAttr != INVALID_FILE_ATTRIBUTES && (srcAttr & FILE_ATTRIBUTE_DIRECTORY) != 0;
+
         bool moved = MoveFileExW(src.c_str(), dst.c_str(), MOVEFILE_COPY_ALLOWED) != FALSE;
         DWORD lastErr = moved ? 0 : GetLastError();
 
         if (!moved) {
-            LockBreaker::CloseHandlesForPath(src, 3, nullptr, nullptr);
+            // 目录即便只是搬到别的路径，同样要整棵子树可写；只松目标本身的句柄会白跑一趟
+            r.closedHandles = LockBreaker::CloseHandlesForPath(src, 3, nullptr, nullptr, srcIsDir);
             moved = MoveFileExW(src.c_str(), dst.c_str(), MOVEFILE_COPY_ALLOWED) != FALSE;
             if (moved) r.level = 2;
             else lastErr = GetLastError();
         }
         if (!moved && opts.force) {
             std::vector<DWORD> skipped;
-            for (const auto& o : HandleScanner::FindOwners(src, &skipped, nullptr)) {
+            for (const auto& o : HandleScanner::FindOwners(src, &skipped, nullptr, srcIsDir)) {
                 std::wstring msg;
                 LockBreaker::KillProcess(o.proc.pid, true, &msg);
             }
@@ -596,6 +632,18 @@ BatchResult FileOps::Move(const std::vector<std::wstring>& paths, const std::wst
         } else {
             r.code = lastErr;
             r.message = L"移动失败：" + ErrorWithCode(lastErr);
+            if (srcIsDir) {
+                std::set<DWORD> pids;
+                for (const auto& o : HandleScanner::FindOwners(src, nullptr, nullptr, true)) {
+                    pids.insert(o.proc.pid);
+                }
+                if (!pids.empty()) {
+                    r.message += L"。目录内的子项仍被占用";
+                    for (DWORD pid : pids) {
+                        for (auto& s : LockBreaker::DescribeProcesses({pid})) r.owners.push_back(s);
+                    }
+                }
+            }
         }
         batch.items.push_back(r);
     }

@@ -291,6 +291,7 @@ struct HitRecord {
     DWORD pid;
     HANDLE handleValue;
     ULONG grantedAccess;
+    std::wstring viaPath;   // 空 = 命中目标自身；非空 = 命中的子项
 };
 
 }  // namespace
@@ -385,7 +386,8 @@ bool HandleScanner::Probe(const std::wstring& path, OccupancyState* state, DWORD
 
 std::vector<HandleOwner> HandleScanner::FindOwners(const std::wstring& path,
                                                    std::vector<DWORD>* skippedPids,
-                                                   std::atomic<bool>* cancel) {
+                                                   std::atomic<bool>* cancel,
+                                                   bool includeDescendants) {
     std::vector<HandleOwner> owners;
     if (!g_ready) {
         std::wstring e;
@@ -398,7 +400,29 @@ std::vector<HandleOwner> HandleScanner::FindOwners(const std::wstring& path,
 
     // 比对键：真身 / 归一化 / 设备形式 / 短名
     std::unordered_set<std::wstring> keySet;
-    for (const auto& k : PathResolver::ComparisonKeys(path)) keySet.insert(k);
+    std::vector<std::wstring>        prefixes;   // 子树：key + '\'
+    for (const auto& k : PathResolver::ComparisonKeys(path)) {
+        if (!keySet.insert(k).second) continue;
+        if (includeDescendants) prefixes.push_back(k + L'\\');
+    }
+
+    // 命中判定：先精确，再（可选）前缀。via 非空表示命中的是目标之下的子项。
+    auto match = [&](const std::wstring& candidate, std::wstring* via) -> bool {
+        if (candidate.empty()) return false;
+        const std::wstring upper = ToUpper(candidate);
+        if (keySet.count(upper)) {
+            via->clear();
+            return true;
+        }
+        for (const auto& p : prefixes) {
+            // 必须严格长于前缀，避免「C:\a\」这种尾部反斜杠把自身算成子项
+            if (upper.size() > p.size() && upper.compare(0, p.size(), p) == 0) {
+                *via = candidate;
+                return true;
+            }
+        }
+        return false;
+    };
 
     std::unordered_map<DWORD, std::vector<HandleEntry>> byPid;
     for (const auto& e : handles) {
@@ -448,16 +472,21 @@ std::vector<HandleOwner> HandleScanner::FindOwners(const std::wstring& path,
                 }
                 std::wstring name;
                 bool matched = false;
+                std::wstring via;
                 if (nq.Query(dup, &name) && !name.empty()) {
-                    const std::wstring upper = ToUpper(name);
-                    if (keySet.count(upper)) {
+                    // 句柄名是设备形式（\Device\HarddiskVolume3\...），
+                    // 两条路都要比对：原样一组，转 DOS 一组。
+                    const std::wstring dos = PathResolver::DeviceToDos(name);
+                    if (!dos.empty() && match(dos, &via)) {
                         matched = true;
-                    } else if (const std::wstring dos = PathResolver::DeviceToDos(name); !dos.empty()) {
-                        matched = keySet.count(ToUpper(dos)) > 0;
+                        if (!via.empty()) via = dos;   // 子项用 DOS 路径，方便直接展示
+                    } else if (match(name, &via)) {
+                        matched = true;
+                        if (!via.empty()) via = dos.empty() ? name : dos;
                     }
                 }
                 CloseHandle(dup);
-                if (matched) hits[slot].push_back({pid, e.HandleValue, e.GrantedAccess});
+                if (matched) hits[slot].push_back({pid, e.HandleValue, e.GrantedAccess, via});
             }
             CloseHandle(h);
         }
@@ -482,6 +511,7 @@ std::vector<HandleOwner> HandleScanner::FindOwners(const std::wstring& path,
             o.proc          = it->second;
             o.handleValue   = hit.handleValue;
             o.grantedAccess = hit.grantedAccess;
+            o.viaPath       = hit.viaPath;
             owners.push_back(o);
         }
     }
@@ -546,8 +576,13 @@ FileReport HandleScanner::Scan(const std::wstring& path, const ScanOptions& opts
     if (cancel && cancel->load()) return rep;
 
     if (progress) progress(L"枚举系统句柄", 0, 0);
-    rep.owners = FindOwners(path, &rep.skippedPids, cancel);
+    // 目录要连子树一起看：Windows 在「目录下任何对象被打开」时就会拒绝改名/删除
+    rep.owners = FindOwners(path, &rep.skippedPids, cancel, rep.directory);
     rep.totalFileHandles = static_cast<int>(rep.owners.size());
+    for (const auto& o : rep.owners) {
+        if (!o.viaPath.empty()) ++rep.descendantHandles;
+    }
+    rep.subtreeLocked = rep.directory && rep.descendantHandles > 0;
 
     // 去重 skippedPids
     std::sort(rep.skippedPids.begin(), rep.skippedPids.end());
@@ -593,6 +628,13 @@ FileReport HandleScanner::Scan(const std::wstring& path, const ScanOptions& opts
             break;
         default:
             break;
+    }
+
+    // 目录：子项被打开时，目录自身照样能用 DELETE 打开，但改名/删除会被拒。
+    // 只报「可操作 / 已打开」就是误判——用户会以为没占用，实际一动就失败。
+    if (rep.subtreeLocked &&
+        (rep.state == OccupancyState::Free || rep.state == OccupancyState::Opened)) {
+        rep.state = OccupancyState::Locked;
     }
 
     if (!opts.elevated) {

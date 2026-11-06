@@ -224,13 +224,23 @@ json::Value ReportToJson(const FileReport& rep) {
     o.Set("dir", json::Value::MakeBool(rep.directory));
     o.Set("needElevation", json::Value::MakeBool(rep.needElevation));
     o.Set("handles", json::Value::MakeNumber(rep.totalFileHandles));
+    o.Set("subtreeLocked", json::Value::MakeBool(rep.subtreeLocked));
+    o.Set("descendantHandles", json::Value::MakeNumber(rep.descendantHandles));
 
     json::Value owners = json::Value::MakeArray();
     std::vector<DWORD> seen;
     for (const auto& ow : rep.owners) {
-        bool dup = false;
-        for (DWORD p : seen) if (p == ow.proc.pid) { dup = true; break; }
-        if (dup) continue;   // 进程维度聚合：同进程多句柄只出一行，数量在 handles 里
+        size_t dupIdx = static_cast<size_t>(-1);
+        for (size_t i = 0; i < seen.size(); ++i) {
+            if (seen[i] == ow.proc.pid) { dupIdx = i; break; }
+        }
+        if (dupIdx != static_cast<size_t>(-1)) {
+            // 同一进程既占目标又占子项时，优先让 UI 看到「子项」这条更具体的信息
+            if (!ow.viaPath.empty() && owners.arr[dupIdx].GetString("via").empty()) {
+                owners.arr[dupIdx].Set("via", json::Value::MakeString(Utf16ToUtf8(ow.viaPath)));
+            }
+            continue;   // 进程维度聚合：同进程多句柄只出一行，数量在 handles 里
+        }
         seen.push_back(ow.proc.pid);
 
         json::Value po = json::Value::MakeObject();
@@ -243,6 +253,7 @@ json::Value ReportToJson(const FileReport& rep) {
         po.Set("protected", json::Value::MakeBool(ow.proc.protectedProc));
         po.Set("elevated", json::Value::MakeBool(ow.proc.elevated));
         po.Set("image", json::Value::MakeBool(ow.isImageMapping));
+        po.Set("via", json::Value::MakeString(Utf16ToUtf8(ow.viaPath)));
         owners.arr.push_back(std::move(po));
     }
     o.Set("owners", std::move(owners));

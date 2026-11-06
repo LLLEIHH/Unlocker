@@ -193,6 +193,14 @@ int RunList(const std::vector<std::wstring>& paths, bool json, bool quiet) {
                     if (!owners.empty()) owners += L", ";
                     owners += ow.proc.name + L" (" + std::to_wstring(ow.proc.pid) + L")";
                     if (ow.proc.handleCount > 1) owners += L" ×" + std::to_wstring(ow.proc.handleCount);
+                    // 命中的是子项：不改名会被当成「目录自己没占用」，用户会反复试
+                    if (!ow.viaPath.empty() && !rep.canonical.empty() &&
+                        ow.viaPath.size() > rep.canonical.size() &&
+                        _wcsnicmp(ow.viaPath.c_str(), rep.canonical.c_str(), rep.canonical.size()) == 0) {
+                        std::wstring rel = ow.viaPath.substr(rep.canonical.size());
+                        if (!rel.empty() && rel[0] == L'\\') rel = rel.substr(1);
+                        owners += L" [子项 " + rel + L"]";
+                    }
                 }
                 if (owners.empty()) owners = L"—";
 
@@ -205,6 +213,10 @@ int RunList(const std::vector<std::wstring>& paths, bool json, bool quiet) {
                     line += L"    [内置黑名单] " + PolicyGuard::RuleName(pol.ruleId) + L"：" + pol.reason + L"\n";
                 } else if (pol.NeedsConfirm()) {
                     line += L"    [需确认] " + PolicyGuard::RuleName(pol.ruleId) + L"：" + pol.reason + L"\n";
+                }
+                if (rep.subtreeLocked) {
+                    line += L"    目录内有 " + std::to_wstring(rep.descendantHandles) +
+                            L" 个句柄指向子项：改名/删除会被系统拒绝（即便目录本身可打开）\n";
                 }
                 // 只有在结论可能被「看不到的进程」影响时才提这一行，否则是纯噪音
                 if (inconclusive && !rep.skippedPids.empty()) {
