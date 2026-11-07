@@ -4,16 +4,16 @@
 
 | 依赖 | 版本 | 备注 |
 | --- | --- | --- |
-| Visual Studio 2022 | Community 即可 | 需要「使用 C++ 的桌面开发」；WinUI 版还需要 Windows SDK 与 AppxPackage 任务集 |
+| Visual Studio 2022 | Community 即可 | 需要「使用 C++ 的桌面开发」工作负载 |
 | CMake | ≥ 3.20 | `build.cmd` 会用 PATH 里的 cmake，也会探测 VS 自带的 |
-| Windows SDK | 10.0.26100 | `makepri.exe` 等工具需要 |
-| Python | 3.8+ | 规则表 CRC、图标生成、载荷打包都用它，无第三方依赖 |
+| Windows SDK | 10.0.26100 | 清单、资源脚本与清单工具需要 |
+| Python | 3.8+ | 规则表 CRC、图标生成、语言表生成都用它，无第三方依赖 |
 
 ## 构建与测试
 
 ```bat
-build.cmd             :: Win32 版 + 单元测试
-build.cmd winui       :: WinUI 3 版
+build.cmd             :: 常规构建（动态 CRT）+ 单元测试
+build.cmd single      :: 单文件版（静态 CRT）
 ```
 
 改完代码至少跑一遍：
@@ -21,7 +21,7 @@ build.cmd winui       :: WinUI 3 版
 ```bat
 build\Release\policy_tests.exe
 build\Release\ipc_tests.exe
-python tools\check-winui-output.py winui\build-winui\x64\Release
+build\Release\subtree_tests.exe
 ```
 
 ## 代码约定
@@ -29,14 +29,11 @@ python tools\check-winui-output.py winui\build-winui\x64\Release
 这些是踩过坑之后定下来的，**别改回去**（README 实现细节章节有原因）：
 
 1. `src/core` 不依赖 UI、不依赖 IPC；`src/ipc` 只搬数据不做决策。新增逻辑先想清楚该放哪层
-2. **不要用 `get_weak()` / `get_self()`** —— 本项目的 WinRT 投影没有实现侧 producer 特化，会实例化失败。统一用 `this` + `alive_` 标志
-3. XAML 布局按 **DIP**，`AppWindow` / `PreferredMinimum*` 按**物理像素**。给 AppWindow 的值都要乘 `GetDpiForWindow()/96`
-4. `AdaptiveTrigger` 在本工程**不触发**，响应式布局用代码在 `SizeChanged` 里切
-5. 文案一律走 `ul::T(L"中文", L"English")` / `ul::Tf(...)`，不要直接写裸字符串
-6. 新增文件要同时加到 `CMakeLists.txt`；WinUI 侧还要加到 `winui/UnlockerApp.vcxproj`
-7. 批处理文件保持 CRLF（`.gitattributes` 已钉死）
-8. `winui/` 下这几个是**构建产物**，不要提交：`UnlockerApp_h.h`、`XamlMetaDataProvider{_h.h,.cpp,.idl}`
-   —— MIDL 与 XAML 编译器把产物写在 `.idl` 旁边（不在 `obj/`），每次构建自动重新生成
+2. 文案一律走 `ul::T(Str::X)` / `ul::Tf(Str::X, ...)`：先在 `tools/gen_lang.py` 的 `ROWS` 里加一行（5 个语种），
+   再执行 `python tools/gen_lang.py` 生成 `LangTable.cpp`，不要直接写裸字符串，也不要在窗口代码里堆字面量
+3. 尺寸一律走 `theme::Scale(96 DPI 逻辑值)`，不要写死像素；新控件要在 `ApplyThemeChange()` 里能跟着换主题重绘
+4. 新增文件要同时加到 `CMakeLists.txt`
+5. 批处理文件保持 CRLF（`.gitattributes` 已钉死）
 
 ## 提交
 
@@ -56,11 +53,11 @@ python tools\check-winui-output.py winui\build-winui\x64\Release
 
 ```bash
 git tag -a v0.9.0 -m "v0.9.0"
-git push origin v0.9.0        # 触发 release.yml：编 WinUI → 校验产物 → 打单文件版 → 建 Release
+git push origin v0.9.0        # 触发 release.yml：跑测试 → 编静态 CRT 单文件版 → 建 Release
 ```
 
-`build.yml` 在每次 push / PR 时只跑 Win32 + 单元测试（不编 WinUI，省 20 分钟）；
-`release.yml` 需要 WinUI 产物做载荷，所以它自己先编一遍。
+`build.yml` 在每次 push / PR 时跑构建与三套单元测试；
+`release.yml` 在此之上再编一次静态 CRT 单文件版，产物是 `Unlocker-Single.exe`。
 
 改完 `.github/workflows/` 之后，可以用 API 空跑一次验证语法（不会建 Release）：
 

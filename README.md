@@ -70,8 +70,6 @@
 | 常规构建 | `Unlocker.exe`（约 500 KB） | 动态链接 CRT，体积更小，机器上需有 VC++ 运行库 |
 | 可选组件 | `UnlockerShell.dll` | 早期 COM 右键扩展；右键菜单已改为注册表 verb，**这个 DLL 不再需要**，仅为清理旧安装保留 |
 
-> **WinUI 3 前端（`winui/`）已冻结**：不再构建、不再修复，代码与踩坑记录保留在仓库里作参考。
-
 ## 从源码构建
 
 需要 **VS 2022**（Community 或 BuildTools，含 C++ 工作负载）、**CMake ≥ 3.20**、**Windows SDK 10.0.26100**、Python 3。
@@ -100,8 +98,6 @@ src/ipc/       命名管道 + 提权 worker（三重身份校验）
 src/ui/        Win32 前端：Theme 层、自绘控件、主窗口、设置窗口
 src/shell/     右键菜单注册（HKCU 注册表 verb）+ 旧 COM 扩展
 src/cli/       命令行入口（--list / /u / /d / /r / /m / /c）
-src/bundle/    历史：WinUI 时代的自解压引导器（已随 WinUI 冻结）
-winui/         WinUI 3 前端（已冻结，仅存档）
 tools/         规则表 CRC、图标生成、语言表生成、产物校验、开发期截图脚本
 tests/         policy / ipc / subtree 三套回归
 docs/          截图
@@ -247,76 +243,7 @@ Unlocker.exe --worker                     # -> 退出码 2，无任何行为
 **仍需在真机上人工点一遍**（自动化无法批准 UAC）：T32（取消 UAC）、T33（会话复用只弹一次）、
 T34（空闲 5 分钟自退）、T48（手动提权后拖放仍有横幅提示）、T52（标准用户输入管理员凭据跨用户提权）。
 
-## 六、WinUI 3 版本（已冻结，仅作存档）
-
-> 2026-11 起 WinUI 3 前端不再维护：`build.cmd winui`、`src/bundle` 的自解压载荷与 CI 里的相关
-> 步骤都已停用，交付改为上文的 Win32 单文件版。下面的内容保留，供以后想复活这条线时参考 ——
-> 坑都是真踩过的。
-
-`winui/` 下是 WinUI 3（C++/WinRT）版本，设计按三条已确认的决策落地：
-**自绘标题栏（`ExtendsContentIntoTitleBar`）+ 配色跟随系统（ThemeResource / `ActualThemeChanged`）+ 卡片式布局**。
-
-```
-winui/
-├─ UnlockerApp.vcxproj      # 引用 WindowsAppSDK 1.7 + CppWinRT；XAML 胶水手写
-├─ App.xaml / .h / .cpp     # 合并 XamlControlsResources；IXamlMetadataProvider 委托给生成 provider
-├─ XamlTypeLookup.h         # ← 新增：把生成的 XamlTypeInfoProvider 暴露给 App（M5.1 的解法）
-├─ XamlTypeInfoGlue.cpp     # 唯一包含 XamlTypeInfo.g.cpp 的 TU
-├─ MainWindow.xaml          # 亚克力 + 两张圆角卡片 + 自绘标题栏 + 键盘加速键
-├─ MainWindow.xaml.h/.cpp   # 拖放、扫描、深扫、五个操作、事件绑定、窗口位置记忆
-├─ main.cpp                 # 三态分流（--worker / CLI / WinUI）+ 单实例转发
-└─ packages/                # nuget 还原产物（WindowsAppSDK / CppWinRT / WebView2 / SDK.BuildTools）
-```
-
-数据层与安全层**零改动**：直接编译 `src/core` + `src/ipc` + `src/ui`，worker、黑名单、协议、退出码全部复用。
-
-### 构建
-
-```bat
-build.cmd winui
-```
-
-脚本会：还原 NuGet 包 → CMake 配置 → 调 MSBuild 构建 → 跑 `tools/check-winui-output.py` 校验产物
-（缺 `Unlocker.exe` / PRI / XBF / 框架 dll，或 PRI 里没有 `themeresources.xbf` 等资源名，直接失败）。
-产物：`winui\build-winui\x64\Release\Unlocker.exe`。
-
-### 曾经卡住的点（已解决，别绕回去）
-
-1. **需要 UWP/WinUI 构建支持**：现装的是 **VS 2022 Community 17.14**，其 MSBuild 自带
-   `AppxPackage` 任务集（`Microsoft.Build.AppxPackage.dll`、`Packaging.Pri.Tasks.dll`），
-   PriGen 能正常产出 `Unlocker.pri` → 构建后自动复制成 `resources.pri`（MRT unpackaged 约定名）。
-2. **启动 fail-fast 0x802B000A 的真正原因不是 PRI**，而是 `App` 的 `IXamlMetadataProvider` 三个方法
-   一律返回 `nullptr`：框架实例化 `XamlControlsResources` 时取不到控件类型元数据 → 直接崩。
-   解法：把 XAML 编译器生成的 `XamlTypeInfoProvider`（自带回落框架 provider 的逻辑）通过
-   `winui/XamlTypeLookup.h` 暴露出来，`App::GetXamlType` 委托给它。
-   **不要再**通过「删 `XamlControlsResources`、把颜色写成字面量」来绕过。
-3. WinUI 版本必须是 **unpackaged**（`WindowsPackageType=None` + 自包含）。
-   MSIX 打包的应用里 `ShellExecuteEx(runas)` 基本不可用，而整套安全模型依赖「UI 拉起提权 worker」。
-   另外 exe 必须仍然叫 `Unlocker.exe`——worker 三重校验要求客户端映像路径等于自身 exe。
-
-### 键盘
-
-`Ctrl+O` 添加文件 / `Ctrl+Shift+O` 添加文件夹 / `F5` 重新扫描 / `Ctrl+A` 全选 /
-`Del` 从列表移除（不动磁盘）/ `Ctrl+Del` 解锁并删除 / `Enter` 解锁。
-窗口位置与大小记在 `HKCU\Software\Unlocker\WindowPlacement`（只在正常关闭且非最大化时写入）。
-
-### 窗口尺寸（DPI 与自适应）
-
-- **最小尺寸 820×560 DIP**，用 `OverlappedPresenter.PreferredMinimum{Width,Height}` 设死，
-  程序化 `SetWindowPos` 也压不下去。注意这个 API 收的是**物理像素**，代码里按
-  `GetDpiForWindow()/96` 折算（150% 缩放下其实是 1230×840 像素）。
-- **宽度 < 980 DIP** 时底部六个操作按钮自动退化成纯图标（文案隐藏、ToolTip 保留描述），
-  避免横向挤爆把「重新扫描」裁出可视区。
-  切换是代码在 `RootGrid.SizeChanged` 里做的 —— 实测 `AdaptiveTrigger` 在这个手写 XAML
-  胶水工程里不触发，别改回声明式写法。
-- 卡片有 `MinHeight`（文件卡 176 / 进程卡 132 DIP），配合上面的最小高度保证内容不会被压扁。
-- 恢复上次位置时会夹进当前显示器工作区，换显示器/改缩放后不会跑到屏幕外。
-
-开发期核对界面用 `tools/screencap.py`（GDI 截图，不依赖 Pillow/.NET）和
-`tools/resize_check.py`（程序化缩放，验证最小尺寸）。两个都要在 DPI 感知下跑，脚本里已处理。
-
-
-## 七、已知限制
+## 六、已知限制
 
 1. **进程列表右键「结束进程」菜单未做**：协议 op 表是白名单，没有 `kill` 项；终止进程目前只能通过
    「强制模式 + 解锁并删除」这条路径走 `Level 4`，并且会先过黑名单与二次确认。
@@ -328,21 +255,19 @@ build.cmd winui
    图标未接入。
 5. 黑名单规则表 CRC 只能防「改了规则忘了改 CRC」这类手滑，**不是防破解**；真正的完整性只能靠代码签名。
 
-## 八、版本控制
+## 七、版本控制
 
 仓库用 git 管理（`main` 分支）。几个约定，改 `.gitignore` 之前先看一眼：
 
 | 规则 | 原因 |
 | --- | --- |
-| 忽略 `/build/`、`/winui/build-winui*/` | 构建产物（约 2.4 GB），随时可再生 |
-| 忽略 `/winui/packages/` | NuGet 还原产物（428 MB），`build.cmd winui` 会自动重新下载 |
+| 忽略 `/build/`、`/build-single/` | 构建产物，随时可再生 |
 | 忽略 `/.workbuddy/` | 开发期记忆与会话数据，不属于源码 |
-| 忽略 `/tools/nuget/nuget.exe` | 8.5 MB 二进制，`build.cmd winui` 缺失时会自动下载 |
 
 `.gitattributes` 里 **`*.cmd` / `*.bat` 强制 `eol=crlf`**：LF 的批处理在 cmd.exe 下会解析出错
 （`chcp 65001` 时还会吃中文字节）。仓库内统一存 LF，工作区按规则还原成 CRLF。
 
-## 九、应用图标
+## 八、应用图标
 
 图标不是手绘的位图，而是**几何定义 → 一次生成全部尺寸**：
 
@@ -362,12 +287,11 @@ python tools\make_icon.py --sheet preview.png        :: 三方案对照图
 设计空间固定 256×256：圆角方块 8..248（r=56）、锁体 72..184 × 114..206、
 锁梁弧心与锁体主轴都在 x=128（早期版本锁梁整体偏右 14 单位，看起来是歪的，已修）。
 
-两个 exe 都通过各自的资源脚本引用它：
+exe 通过资源脚本引用它：
 
-| 前端 | 资源脚本 | 说明 |
-| --- | --- | --- |
-| Win32（当前） | `src/ui/Resource.rc` | 图标 + 版本信息；ico 路径由 `CMakeLists.txt` 的 `include_directories` 提供 |
-| WinUI 3（已冻结） | `winui/UnlockerApp.rc` | 同上；rc.exe 靠 `AdditionalIncludeDirectories` 找 ico |
+| 资源脚本 | 说明 |
+| --- | --- |
+| `src/ui/Resource.rc` | 图标 + 版本信息；ico 路径由 `CMakeLists.txt` 的 `include_directories` 提供 |
 
 资源 ID 用数字 `101`（`#define IDI_APPICON 101`），不用字符串名 —— 字符串名虽然也能编译，
 但 shell 取图标是按序号落的，用名字容易出现「资源在、任务栏却没图标」。
@@ -375,7 +299,7 @@ python tools\make_icon.py --sheet preview.png        :: 三方案对照图
 校验方式（不依赖任何额外工具）：`FindResourceW(exe, 101, RT_GROUP_ICON)` 非空，
 或 `ExtractIconExW` 取第 0 个图标能画出来。
 
-## 十、单文件版（Unlocker-Single.exe）
+## 九、单文件版（Unlocker-Single.exe）
 
 当前交付的单文件版是 **Win32 前端 + 静态 CRT**：
 
@@ -394,39 +318,3 @@ CMake 用 `UNLOCKER_STATIC_CRT=ON` 在**任何 target 之前**把 `CMAKE_MSVC_RU
 | 部署 | 单个 exe，不解压、不写 `%LOCALAPPDATA%`、不需要管理员 |
 | 右键菜单 | 可用：装的是 HKCU 注册表 verb，不需要附带 DLL |
 | 命令行 | 完整保留：`--list` / `/u` / `/d` / `/r` / `/m` / `/c` / `--worker` 全在这一个文件里 |
-
-### （历史）自解压引导器
-
-WinUI 3 的 C++ 没有单文件模式：运行时 DLL、`resources.pri`、`*.xbf` 必须落盘（实测 Release
-目录 189 项 / 62 MB）。所以 WinUI 时代另有一个 `Unlocker-Portable.exe` —— 把整个目录压成载荷
-塞进 RCDATA，首次运行释放到用户目录：
-
-```
-Unlocker-Portable.exe                   # 29 MB，单文件，拷到哪都能双击
-   └─ 内嵌 RCDATA 载荷（27.5 MB）
-        └─ 首次运行解压到 %LOCALAPPDATA%\Unlocker\App\<载荷哈希>\
-             └─ 启动真正的 Unlocker.exe
-```
-
-代码在 `src/bundle/`，随 WinUI 冻结已不再构建；`tools/make_bundle.py` 保留着打包脚本。
-当时的实测数据：
-
-| 项 | 说明 |
-| --- | --- |
-| 体积 | 62.1 MB → 27.5 MB（XPRESS_HUFF，2.26x） |
-| 依赖 | 只有 `Cabinet` / `ADVAPI32` / `KERNEL32` / `USER32` —— 静态 CRT，不需要 VC++ 运行库 |
-| 首次运行 | 解压约 0.5 秒（62 MB 解压 + 落盘），之后写 `ready.tag` |
-| 再次运行 | 0.7 秒（其中约 0.5 秒是启动前的完整性校验） |
-| 完整性校验 | 每次启动重算全部 275 个文件的 FNV-1a 64，对不上就重新解压（自愈） |
-| 目录 ACL | 解压目录写显式 DACL 并断开父目录继承 |
-| 升级 | 载荷哈希变了就落到新目录，旧版本自动清理 |
-| 并发 | 命名互斥量 `Local\Unlocker.Bundle.Extract` 串行化解压 |
-
-**为什么不用压缩库**：本机没有 zlib 可链，Windows 自带的 CompressAPI 恰好能用。坑在于
-「自己拼压缩流格式」—— MSZIP 的块头试了三种写法都和系统解压器对不上（都返回 605），
-最后改成**生产和消费都用 CompressAPI**，格式天然一致。XPRESS_HUFF 对 DLL 约 2.3x。
-
-**这个方案的风险（也是停用的原因之一）**：单文件版把 exe 解到 `%LOCALAPPDATA%` —— 用户可写
-目录，而程序会从这里拉起需要 UAC 提权的 worker。启动前哈希校验能挡住「文件被改 / 被截断」，
-但挡不住同用户进程在校验之后、提权之前替换文件（TOCTOU）。Win32 静态 CRT 版没有这个问题：
-exe 原地运行，不解压到任何可写目录。

@@ -36,18 +36,16 @@ echo         Install VS 2022 BuildTools or Community with the C++ workload first
 exit /b 1
 
 :vs_ready
-set "XAMLDIR=%VSDIR%\MSBuild\Microsoft\WindowsXaml\v17.0"
 set "CMAKE=%VSDIR%\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
 if not exist "%CMAKE%" set "CMAKE=cmake"
 
 set "PY="
 if exist "%USERPROFILE%\.workbuddy\binaries\python\versions\3.13.12\python.exe" set "PY=%USERPROFILE%\.workbuddy\binaries\python\versions\3.13.12\python.exe"
 
-if /i "%~1"=="winui" goto winui
 if /i "%~1"=="single" goto single
 
 echo [1/2] Configure...
-"%CMAKE%" -S . -B build -G "Visual Studio 17 2022" -A x64 -DUNLOCKER_BUILD_APP=ON -DUNLOCKER_BUILD_WINUI=OFF
+"%CMAKE%" -S . -B build -G "Visual Studio 17 2022" -A x64 -DUNLOCKER_BUILD_APP=ON
 if errorlevel 1 exit /b 1
 if defined PY "%CMAKE%" -S . -B build -DPython3_EXECUTABLE="%PY%"
 
@@ -64,7 +62,7 @@ exit /b 0
 rem Single-file build: static CRT so the exe needs no VC++ Redistributable.
 rem Keep this file ASCII-only (see the note above about DBCS consoles).
 echo [1/2] Configure (static CRT)...
-"%CMAKE%" -S . -B build-single -G "Visual Studio 17 2022" -A x64 -DUNLOCKER_BUILD_APP=ON -DUNLOCKER_BUILD_WINUI=OFF -DUNLOCKER_STATIC_CRT=ON
+"%CMAKE%" -S . -B build-single -G "Visual Studio 17 2022" -A x64 -DUNLOCKER_BUILD_APP=ON -DUNLOCKER_STATIC_CRT=ON
 if errorlevel 1 exit /b 1
 if defined PY "%CMAKE%" -S . -B build-single -DPython3_EXECUTABLE="%PY%"
 
@@ -74,56 +72,4 @@ if errorlevel 1 exit /b 1
 
 echo.
 echo Done: build-single\Release\Unlocker.exe ^(no VC++ runtime needed^)
-exit /b 0
-
-:winui
-rem NOTE: the XAML compile pipeline comes from the WindowsAppSDK NuGet package (the vcxproj has a
-rem hand-written glue layer); it does not rely on VS WindowsXaml rules. A missing dir only warns.
-rem IMPORTANT: keep this file ASCII-only. Under a GBK console, a UTF-8 Chinese comment can swallow
-rem the trailing CR into a DBCS pair, which splits the line and runs its tail as a command.
-if not exist "%XAMLDIR%" echo [WARN] VS WindowsXaml rules missing (build still works, see winui/UnlockerApp.vcxproj glue notes)
-
-:have_xaml
-rem nuget.exe is an 8 MB binary and is not committed; download it on demand. Offline: drop it in.
-if exist "tools\nuget\nuget.exe" goto have_nuget
-echo [0/5] Downloading nuget.exe...
-if not exist "tools\nuget" mkdir "tools\nuget"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri 'https://dist.nuget.org/win-x86-commandline/latest/nuget.exe' -OutFile 'tools\nuget\nuget.exe'"
-if not exist "tools\nuget\nuget.exe" (
-    echo [ERROR] Failed to download nuget.exe. Put it at tools\nuget\nuget.exe manually and retry.
-    exit /b 1
-)
-
-:have_nuget
-if exist "winui\packages\Microsoft.WindowsAppSDK.1.7.251107005" goto have_wasdk
-echo [1/5] Restore Microsoft.WindowsAppSDK...
-tools\nuget\nuget.exe install Microsoft.WindowsAppSDK -Version 1.7.251107005 -OutputDirectory winui\packages -NonInteractive
-if errorlevel 1 exit /b 1
-
-:have_wasdk
-if exist "winui\packages\Microsoft.Windows.CppWinRT.3.0.260818.1" goto have_cppwinrt
-echo [2/5] Restore Microsoft.Windows.CppWinRT...
-tools\nuget\nuget.exe install Microsoft.Windows.CppWinRT -OutputDirectory winui\packages -NonInteractive
-if errorlevel 1 exit /b 1
-
-:have_cppwinrt
-echo [3/5] Configure...
-"%CMAKE%" -S . -B build -G "Visual Studio 17 2022" -A x64 -DUNLOCKER_BUILD_APP=ON -DUNLOCKER_BUILD_WINUI=ON
-if errorlevel 1 exit /b 1
-if defined PY "%CMAKE%" -S . -B build -DPython3_EXECUTABLE="%PY%"
-
-echo [4/5] Build WinUI...
-"%CMAKE%" --build build --config Release --target winui
-if errorlevel 1 exit /b 1
-
-echo [5/5] Verify output...
-if defined PY (
-    "%PY%" tools\check-winui-output.py winui\build-winui\x64\Release
-    if errorlevel 1 exit /b 1
-) else (
-    echo [WARN] Python not found, skip output verification.
-)
-
-echo.
-echo Done: winui\build-winui\x64\Release\Unlocker.exe
 exit /b 0

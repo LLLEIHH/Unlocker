@@ -139,7 +139,7 @@ def write_png(path: str, w: int, h: int, rgb: bytes) -> None:
 
 
 def find_window_for_pid(pid: int) -> int:
-    """该进程里面积最大的可见顶层窗口（WinUI 主窗口）。"""
+    """该进程里面积最大的可见顶层窗口（主窗口）。"""
     best = [0, 0]
     proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 

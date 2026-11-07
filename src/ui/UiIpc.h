@@ -18,7 +18,7 @@ bool SendPathsToRunningInstance(const std::vector<std::wstring>& paths, DWORD ti
 // 在独立线程里监听；收到路径后 PostMessage(hwnd, WM_APP_SHELL_PATHS, 0, new std::vector<std::wstring>)
 bool StartUiPipeListener(HWND hwnd);
 
-// WinUI 宿主没有自己的 WndProc，用回调版本（回调会在监听线程里调用，调用方自行切线程）
+// 没有宿主窗口时用回调版本（回调会在监听线程里调用，调用方自行切线程）
 bool StartUiPipeListenerFn(std::function<void(std::vector<std::wstring>)> callback);
 
 }  // namespace ul

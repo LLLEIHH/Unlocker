@@ -32,9 +32,8 @@ body:
     attributes:
       label: 用的哪个形态
       options:
-        - Unlocker-Portable.exe（单文件版）
-        - WinUI 3 版（Unlocker.exe + 一堆文件）
-        - Win32 legacy 版
+        - Unlocker-Single.exe（单文件版）
+        - Unlocker.exe（常规构建）
         - 从源码自己编的
     validations:
       required: true

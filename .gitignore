@@ -1,24 +1,11 @@
 # ---------------------------------------------------------------- 构建产物
-# CMake / MSBuild 中间件与输出目录，全部可再生
+# CMake 中间件与输出目录，全部可再生
 /build/
 /build-single/
 /build.bak-lei-cache/
-/winui/build-winui/
-/winui/build-winui.bak-lei/
 
-# ---------------------------------------------------------------- 依赖还原
-# build.cmd winui 会用 tools/nuget/nuget.exe 重新还原（4 个包共 ~430 MB）
-/winui/packages/
 # nuget.exe 是 8 MB 二进制，由 build.cmd 按需下载，不进仓库
-/tools/nuget/nuget.exe
 
-# ---------------------------------------------------------------- 生成到源码目录的中间产物
-# MIDL 与 XAML 编译器把 IDL/元数据代理的产物写在 .idl 旁边（不是 obj 目录），
-# 每次 build.cmd winui 都会重新生成；早期误提交过一份旧工具链的残留，已移出仓库。
-/winui/UnlockerApp_h.h
-/winui/XamlMetaDataProvider_h.h
-/winui/XamlMetaDataProvider.cpp
-/winui/XamlMetaDataProvider.idl
 
 # ---------------------------------------------------------------- 本机状态
 .vs/

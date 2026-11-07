@@ -6,7 +6,6 @@ if(NOT MSVC)
 endif()
 
 option(UNLOCKER_BUILD_APP "构建主程序、右键扩展等完整交付物" ON)
-option(UNLOCKER_BUILD_WINUI "构建 WinUI 3 版本（需先还原 winui/packages）" OFF)
 # 单文件分发：把 MSVC 运行库静态链进产物，成品不依赖 vcruntime140/msvcp140
 # 必须在任何 target 之前设置：unlocker_core 静态库和 exe 必须是同一套 CRT，否则 LNK2038
 option(UNLOCKER_STATIC_CRT "静态链接 MSVC 运行库（单文件分发）" OFF)
@@ -130,45 +129,6 @@ if(UNLOCKER_BUILD_APP)
     set_target_properties(UnlockerShell PROPERTIES OUTPUT_NAME "UnlockerShell")
 endif()
 
-# ---------------------------------------------------------------- 单文件版（自解压引导器）
-# WinUI 3 的 C++ 版本没有单文件模式，所以把整个 Release 目录压成载荷塞进 exe 资源，
-# 首次运行解到 %LOCALAPPDATA%\Unlocker\App\<载荷哈希>\ 再启动。见 src/bundle/BundleMain.cpp。
-#
-# 载荷源是 WinUI 的输出目录；没有它就跳过这个目标（CI 里只跑 Win32 时属正常情况），
-# 否则打包脚本会以「源目录不存在」失败，把整个构建带挂。
-set(WINUI_RELEASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/winui/build-winui/x64/Release")
-if(UNLOCKER_BUILD_APP AND Python3_Interpreter_FOUND AND EXISTS "${WINUI_RELEASE_DIR}/Unlocker.exe")
-    set(BUNDLE_DIR "${CMAKE_CURRENT_BINARY_DIR}/bundle")
-    set(BUNDLE_PAYLOAD "${BUNDLE_DIR}/payload.bin")
-    file(TO_NATIVE_PATH "${BUNDLE_PAYLOAD}" BUNDLE_PAYLOAD_NATIVE)
-    string(REPLACE "\\" "\\\\" BUNDLE_PAYLOAD_RC "${BUNDLE_PAYLOAD_NATIVE}")
-
-    # 每次构建都跑一次（脚本内部比内容，没变化就不落盘，不会引起重编）——
-    # 用 add_custom_command(OUTPUT) 的话「输出已存在」就永久跳过，改了 UI 还发旧界面。
-    add_custom_target(bundle_payload ALL
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${BUNDLE_DIR}"
-        COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/make_bundle.py"
-                --src "${CMAKE_CURRENT_SOURCE_DIR}/winui/build-winui/x64/Release"
-                --out "${BUNDLE_PAYLOAD}"
-        COMMENT "打包 WinUI 载荷（单文件版）"
-        VERBATIM)
-
-    # 资源脚本里的载荷路径是绝对路径，所以按配置生成一份到 build 目录
-    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/bundle/Bundle.rc.in"
-                   "${BUNDLE_DIR}/Bundle.rc" @ONLY)
-
-    add_executable(UnlockerBundle WIN32
-        src/bundle/BundleMain.cpp
-        "${BUNDLE_DIR}/Bundle.rc")
-    add_dependencies(UnlockerBundle bundle_payload)
-    target_link_libraries(UnlockerBundle PRIVATE cabinet advapi32)
-    # 静态 CRT：成品不依赖 VC++ 运行库，拷到任何 Win10/11 x64 都能直接双击
-    set_property(TARGET UnlockerBundle PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
-    set_target_properties(UnlockerBundle PROPERTIES OUTPUT_NAME "Unlocker-Portable")
-else()
-    message(STATUS "单文件版：跳过（先跑 build.cmd winui 生成 ${WINUI_RELEASE_DIR}）")
-endif()
-
 # ---------------------------------------------------------------- 造锁工具
 add_executable(MakeLock tools/MakeLock/MakeLock.cpp)
 set_target_properties(MakeLock PROPERTIES OUTPUT_NAME "MakeLock")
@@ -197,59 +157,4 @@ add_test(NAME subtree_tests COMMAND subtree_tests)
 
 if(UNLOCKER_BUILD_APP)
     install(TARGETS Unlocker MakeLock UnlockerShell RUNTIME DESTINATION .)
-endif()
-
-# ---------------------------------------------------------------- WinUI 3 版本
-# 说明：本机的安全策略不允许直接执行 MSBuild.exe，所以这里用 CMake 起一个 custom target
-# 代为调用（与 VS 生成器内部调用 MSBuild 是同一条路径）。
-if(UNLOCKER_BUILD_WINUI)
-    set(MSBUILD_EXE
-        "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/MSBuild/Current/Bin/MSBuild.exe"
-        CACHE FILEPATH "MSBuild 可执行文件")
-    # MSBUILD_EXE 三级探测：默认 BuildTools → Community → vswhere 动态定位。
-    # 缓存值无效时依次回退，全部落空则显式报错（fail loud）。
-    if(NOT EXISTS "${MSBUILD_EXE}")
-        set(_msb "C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe")
-        if(NOT EXISTS "${_msb}")
-            find_program(_vswhere vswhere
-                PATHS "C:/Program Files (x86)/Microsoft Visual Studio/Installer"
-                NO_DEFAULT_PATH)
-            if(_vswhere)
-                execute_process(
-                    COMMAND "${_vswhere}" -latest -products *
-                            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64
-                            -property installationPath
-                    OUTPUT_VARIABLE _vsroot
-                    OUTPUT_STRIP_TRAILING_WHITESPACE
-                    ERROR_QUIET)
-                if(_vsroot)
-                    set(_msb "${_vsroot}/MSBuild/Current/Bin/MSBuild.exe")
-                endif()
-            endif()
-        endif()
-        if(EXISTS "${_msb}")
-            set(MSBUILD_EXE "${_msb}" CACHE FILEPATH "MSBuild 可执行文件" FORCE)
-        else()
-            message(FATAL_ERROR
-                "找不到 MSBuild.exe：请安装 VS 2022（BuildTools 或 Community，含 C++ 工作负载），"
-                "或用 -DMSBUILD_EXE=<路径> 显式指定。")
-        endif()
-    endif()
-    message(STATUS "winui: MSBUILD_EXE = ${MSBUILD_EXE}")
-    add_custom_target(winui
-        COMMAND "${MSBUILD_EXE}" "${CMAKE_CURRENT_SOURCE_DIR}/winui/UnlockerApp.vcxproj"
-                /p:Configuration=Release /p:Platform=x64 /m /nologo /v:m
-        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-        USES_TERMINAL
-        VERBATIM)
-    add_dependencies(winui unlocker_core)
-
-    # 没有 VS 的 UWP 工作负载时，C++ 的 XAML 构建规则（Microsoft.Windows.UI.Xaml.Cpp.Targets）缺失，
-    # MarkupCompilePass1 不会自动挂到编译流程里。这里显式单独跑一遍生成 .g.h/.g.cpp。
-    add_custom_target(winui_xaml
-        COMMAND "${MSBUILD_EXE}" "${CMAKE_CURRENT_SOURCE_DIR}/winui/UnlockerApp.vcxproj"
-                /t:MarkupCompilePass1 /p:Configuration=Release /p:Platform=x64 /nologo /v:m
-        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-        USES_TERMINAL
-        VERBATIM)
 endif()

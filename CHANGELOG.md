@@ -21,8 +21,16 @@
 
 - `--install` / `--uninstall` 改为当前用户级（不再需要管理员）；卸载时顺带清理
   旧版 COM 扩展（`UnlockerShell.dll`）在 CLSID 与 `shellex\ContextMenuHandlers` 下的残留。
-- 交付改为 **Win32 单文件版**（`Unlocker-Single.exe`，静态 CRT）；WinUI 3 前端与自解压引导器冻结，
+- 交付改为 **Win32 单文件版**（`Unlocker-Single.exe`，静态 CRT）；WinUI 3 前端与自解压引导器移除，
   发布流程（`.github/workflows/release.yml`）同步切换。
+
+### 移除
+
+- **WinUI 3 前端（`winui/`）**：不再维护，整目录删除；`build.cmd winui`、CMake 的
+  `UNLOCKER_BUILD_WINUI` 目标、`tools/check-winui-output.py` 一并移除。
+- **自解压引导器（`src/bundle/`）**：只为打包 WinUI 产物而存在，随 WinUI 一起删除；
+  `tools/make_bundle.py` 同步移除。单文件交付统一走静态 CRT 的 `Unlocker-Single.exe`。
+- 历史代码仍可在 git 历史（v0.9.0 之前）中取回。
 
 ### 文档
 
