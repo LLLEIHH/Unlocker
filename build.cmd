@@ -44,6 +44,7 @@ set "PY="
 if exist "%USERPROFILE%\.workbuddy\binaries\python\versions\3.13.12\python.exe" set "PY=%USERPROFILE%\.workbuddy\binaries\python\versions\3.13.12\python.exe"
 
 if /i "%~1"=="winui" goto winui
+if /i "%~1"=="single" goto single
 
 echo [1/2] Configure...
 "%CMAKE%" -S . -B build -G "Visual Studio 17 2022" -A x64 -DUNLOCKER_BUILD_APP=ON -DUNLOCKER_BUILD_WINUI=OFF
@@ -57,6 +58,22 @@ if errorlevel 1 exit /b 1
 echo.
 echo Done: build\Release\
 dir /b build\Release\*.exe build\Release\*.dll 2>nul
+exit /b 0
+
+:single
+rem Single-file build: static CRT so the exe needs no VC++ Redistributable.
+rem Keep this file ASCII-only (see the note above about DBCS consoles).
+echo [1/2] Configure (static CRT)...
+"%CMAKE%" -S . -B build-single -G "Visual Studio 17 2022" -A x64 -DUNLOCKER_BUILD_APP=ON -DUNLOCKER_BUILD_WINUI=OFF -DUNLOCKER_STATIC_CRT=ON
+if errorlevel 1 exit /b 1
+if defined PY "%CMAKE%" -S . -B build-single -DPython3_EXECUTABLE="%PY%"
+
+echo [2/2] Build Release...
+"%CMAKE%" --build build-single --config Release --target Unlocker
+if errorlevel 1 exit /b 1
+
+echo.
+echo Done: build-single\Release\Unlocker.exe ^(no VC++ runtime needed^)
 exit /b 0
 
 :winui

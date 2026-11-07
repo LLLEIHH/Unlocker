@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <assemblyIdentity type="win32" name="Unlocker.App" version="0.8.0.0" processorArchitecture="*"/>
+  <assemblyIdentity type="win32" name="Unlocker.App" version="0.9.0.0" processorArchitecture="*"/>
 
   <!-- asInvoker 是功能依赖：主窗口必须与资源管理器同为中完整性，否则拖放静默失效 -->
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">

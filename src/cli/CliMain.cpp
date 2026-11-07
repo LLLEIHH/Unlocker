@@ -17,6 +17,7 @@
 #include "ipc/Json.h"
 #include "ipc/PipeClient.h"
 #include "ipc/Protocol.h"
+#include "shell/ShellIntegration.h"
 
 namespace ul {
 namespace {
@@ -61,7 +62,7 @@ void Out(const std::string& s) {
 }
 
 constexpr wchar_t kUsage[] =
-    L"Unlocker v0.8\n"
+    L"Unlocker v0.9\n"
     L"用法: Unlocker.exe [选项] <路径...>\n\n"
     L"  /u            仅解锁（关句柄），不执行文件操作\n"
     L"  /d            解锁并删除\n"
@@ -73,8 +74,8 @@ constexpr wchar_t kUsage[] =
     L"  --list        只列出占用者，不做任何修改\n"
     L"  --json        机器可读输出\n"
     L"  --quiet       静默（且禁止任何 UAC 弹窗）\n"
-    L"  --install     安装资源管理器右键菜单（需管理员）\n"
-    L"  --uninstall   卸载右键菜单（需管理员）\n\n"
+    L"  --install     添加资源管理器右键菜单（当前用户，无需管理员）\n"
+    L"  --uninstall   移除右键菜单（含旧版 COM 扩展的残留）\n\n"
     L"退出码: 0 成功 / 1 参数错误 / 2 未找到占用者 / 3 权限不足 / 4 被黑名单拦截\n"
     L"        5 解锁失败 / 6 需要重启 / 7 需要确认但 quiet / 8 需要提权但 quiet\n"
     L"不带动作参数时打开图形界面并载入这些路径。\n";
@@ -105,58 +106,21 @@ int CliExitFromBatch(const BatchResult& b) {
 }
 
 // ---------------------------------------------------------------- 右键菜单注册
-constexpr wchar_t kClsid[] = L"{6E2C4A5B-1B3C-4F62-9C0E-2D8E3A9B7F41}";
-
-bool WriteReg(const std::wstring& sub, const std::wstring& name, const std::wstring& value) {
-    HKEY k = nullptr;
-    if (RegCreateKeyExW(HKEY_CLASSES_ROOT, sub.c_str(), 0, nullptr, 0, KEY_WRITE, nullptr, &k, nullptr) !=
-        ERROR_SUCCESS) {
-        return false;
-    }
-    const DWORD bytes = static_cast<DWORD>((value.size() + 1) * sizeof(wchar_t));
-    const bool ok = RegSetValueExW(k, name.empty() ? nullptr : name.c_str(), 0, REG_SZ,
-                                   reinterpret_cast<const BYTE*>(value.c_str()), bytes) == ERROR_SUCCESS;
-    RegCloseKey(k);
-    return ok;
-}
-
-bool DeleteRegTree(const std::wstring& sub) {
-    return RegDeleteTreeW(HKEY_CLASSES_ROOT, sub.c_str()) == ERROR_SUCCESS;
-}
-
+// 走 HKCU 的注册表 verb（路线 B）：不需要管理员、不加载 DLL、单文件版也能用。
 int InstallShell(bool install) {
-    if (!IsElevated()) {
-        Out(L"需要管理员权限才能修改右键菜单，请用管理员终端运行。\n");
-        return kExitAccessDenied;
-    }
-
-    if (!install) {
-        DeleteRegTree(std::wstring(L"CLSID\\") + kClsid);
-        DeleteRegTree(L"*\\shellex\\ContextMenuHandlers\\Unlocker");
-        DeleteRegTree(L"Directory\\shellex\\ContextMenuHandlers\\Unlocker");
-        Out(L"右键菜单已卸载。资源管理器会在下次启动时生效。\n");
+    if (install) {
+        if (!shell::Install()) {
+            Out(L"写入注册表失败，可能被安全软件拦截。\n");
+            return kExitAccessDenied;
+        }
+        Out(L"右键菜单已添加（仅当前用户，无需管理员）。\n"
+            L"Win11 请在右键菜单的「显示更多选项」中查看。\n");
         return kExitOk;
     }
 
-    const std::wstring dll = PathResolver::SelfDir() + L"\\UnlockerShell.dll";
-    if (GetFileAttributesW(dll.c_str()) == INVALID_FILE_ATTRIBUTES) {
-        Out(L"找不到 UnlockerShell.dll，请把它和 Unlocker.exe 放在同一目录。\n");
-        return kExitBadArgs;
-    }
-
-    const std::wstring clsidKey = std::wstring(L"CLSID\\") + kClsid;
-    bool ok = true;
-    ok &= WriteReg(clsidKey, L"", L"Unlocker Shell Extension");
-    ok &= WriteReg(clsidKey + L"\\InprocServer32", L"", dll);
-    ok &= WriteReg(clsidKey + L"\\InprocServer32", L"ThreadingModel", L"Apartment");
-    ok &= WriteReg(L"*\\shellex\\ContextMenuHandlers\\Unlocker", L"", kClsid);
-    ok &= WriteReg(L"Directory\\shellex\\ContextMenuHandlers\\Unlocker", L"", kClsid);
-
-    if (!ok) {
-        Out(L"写入注册表失败（可能被安全软件拦截）。\n");
-        return kExitAccessDenied;
-    }
-    Out(L"右键菜单已安装。Win11 新菜单里请在「显示更多选项」中查看。\n");
+    shell::Uninstall();
+    Out(L"右键菜单已移除（含旧版 COM 扩展的残留）。\n"
+        L"资源管理器无需重启，菜单会立即刷新。\n");
     return kExitOk;
 }
 
@@ -460,7 +424,7 @@ int CliMain(int argc, wchar_t** argv) {
         else if (IsFlag(a, L"--install")) { install = true; }
         else if (IsFlag(a, L"--uninstall")) { uninstall = true; }
         else if (IsFlag(a, L"--help") || IsFlag(a, L"/?")) { Out(kUsage); return kExitOk; }
-        else if (IsFlag(a, L"--version")) { Out(L"Unlocker v0.8 (x64, protocol v3)\n"); return kExitOk; }
+        else if (IsFlag(a, L"--version")) { Out(L"Unlocker v0.9 (x64, protocol v3)\n"); return kExitOk; }
         else paths.push_back(a);
     }
 

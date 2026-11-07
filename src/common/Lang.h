@@ -1,30 +1,171 @@
+// 多语言文案：所有可翻译字符串集中在 LangTable.cpp 的一张二维表里，
+// 加一种语言 = 给表里每一行多补一列（编译器会检查列数），再加一个 Lang 枚举值。
+// 调用点只引用 Str::Xxx，不再把文案写死在业务代码里。
 #pragma once
-// 双语支持（中/英）。设计取舍（不引 resw/PRI，用代码内 T(zh,en)）：
-//   · 不引 resw / PRI —— 本工程的 XAML 管线是手写胶水，不再给它加负载
-//   · 不用巨型字符串枚举 —— 文案直接写在调用点（T(L"中文", L"English")），
-//     改一处不用同时在两个文件里同步，漏翻也不会错位
+
 #include <string>
 
 namespace ul {
 
-enum class Lang { Zh, En };
+enum class Lang {
+    ZhCN = 0,   // 简体中文
+    ZhTW,       // 繁體中文（台灣）
+    ZhHK,       // 繁體中文（香港）
+    ZhMO,       // 繁體中文（澳門）
+    En,
+    Count
+};
+
+enum class Str : int {
+    AppSubtitle,
+    BtnAddFile,
+    BtnAddFolder,
+    BtnAdminScan,
+    BtnForce,
+    BtnUnlock,
+    BtnUnlockDelete,
+    BtnUnlockRename,
+    BtnUnlockMove,
+    BtnUnlockCopy,
+    BtnRescan,
+    BtnMinimize,
+    BtnMaximize,
+    BtnRestore,
+    BtnClose,
+    BtnSettings,
+    ColPath,
+    ColSize,
+    ColOwner,
+    ColStatus,
+    ColProcess,
+    ColPid,
+    ColDesc,
+    ColHandles,
+    HintDrop,
+    BannerFailClosed,
+    BannerElevated,
+    StatusIdle,
+    StatusIdleElevated,
+    StatusFailClosed,
+    StatusScanning,
+    StatusRescanning,
+    StatusScanDone,
+    StatusDeepRequest,
+    StatusDeepProgress,
+    StatusDeepFailed,
+    StatusDeepDone,
+    StatusOpRequest,
+    StatusOpProgress,
+    StatusOpRunning,
+    StatusOpDone,
+    StatusOpFailed,
+    StatusNothingToAdd,
+    StateBlocked,
+    StateConfirm,
+    StateConfirmPrefix,
+    StateScanning,
+    StatePending,
+    EntryIsDir,
+    OwnerChildPrefix,
+    OwnerChildSuffix,
+    ProcProtected,
+    ProcMapped,
+    ProcChildLock,
+    ProcInUse,
+    ProcUnknown,
+    ProcSkippedMany,
+    DlgTooMany,
+    DlgNoTargetsDenied,
+    DlgNoTargets,
+    DlgElevationCancelled,
+    DlgTitlePartial,
+    DlgNothingToScan,
+    DlgBusyQuit,
+    DlgDeniedTitle,
+    DlgDeniedSuffix,
+    DlgDeniedFooter,
+    OpSummary,
+    OpRebootNote,
+    OpDetailSkipped,
+    OpDetailFailed,
+    OpDetailRule,
+    SettingsTitle,
+    SettingsAppearance,
+    ThemeSystem,
+    ThemeLight,
+    ThemeDark,
+    SettingsLanguage,
+    SettingsHint,
+    SettingsShellMenu,
+    SettingsShellMenuHint,
+    ShellMenuVerb,
+    ShellPromptTitle,
+    ShellPromptBody,
+    ShellPromptAdd,
+    ShellPromptLater,
+    ShellInstallFailed,
+    SettingsAbout,
+    SettingsLicense,
+    OccupancyReady,
+    OccupancyOpen,
+    OccupancyLocked,
+    OccupancyMapped,
+    OccupancyDenied,
+    OccupancyKernelLock,
+    OccupancyMissing,
+    OccupancyInaccessible,
+    OccupancyUnknown,
+    ExplainFree,
+    ExplainOpen,
+    ExplainLocked,
+    ExplainMapped,
+    ExplainDenied,
+    ExplainKernelLock,
+    ExplainMissing,
+    ExplainError,
+    ErrSuccess,
+    ErrFileNotFound,
+    ErrPathNotFound,
+    ErrAccessDenied,
+    ErrSharing,
+    ErrLock,
+    ErrInvalidName,
+    ErrBadPath,
+    ErrInvalidParam,
+    ErrDirNotEmpty,
+    ErrNotSameDevice,
+    ErrDiskFull,
+    ErrWriteProtect,
+    ErrCancelled,
+    ErrPrivilege,
+    ErrInvalidHandle,
+    ErrProcessAborted,
+    ErrFileTooLarge,
+    ErrNotSupported,
+    ErrPathTooLong,
+    ErrUnknown,
+    ErrElevationCancelled,
+    ErrWithCodeFmt,
+    Count
+};
 
 Lang GetLang();
 void SetLang(Lang lang);
 
-// 系统首选 UI 语言是 zh-*（含 zh-CN / zh-TW / zh-HK / zh-MO / zh-SG）→ 简体中文，否则英文
+// 系统首选 UI 语言 → 界面语言。zh-Hant 按地区细分到台/港/澳，其余中文用简体，非中文用英文。
 Lang DetectSystemLang();
 
-// 读 HKCU\Software\Unlocker\Language；没有记录就用 DetectSystemLang()
+// 读 HKCU\Software\Unlocker\Language（"zh-CN" / "zh-TW" / "zh-HK" / "zh-MO" / "en"）
 Lang LoadLangPreference();
 void SaveLangPreference(Lang lang);
 
-// 单句文案
-inline const wchar_t* T(const wchar_t* zh, const wchar_t* en) {
-    return GetLang() == Lang::En ? en : zh;
-}
+// 语言自身的名称（用于下拉框，永远用该语言自己的写法）
+const wchar_t* LangNativeName(Lang lang);
+// 稳定的存储标识（注册表用）
+const wchar_t* LangTag(Lang lang);
 
-// 带参数文案：中英格式串分别给（语序不同，不能共用）
-std::wstring Tf(const wchar_t* zhFmt, const wchar_t* enFmt, ...);
+const wchar_t* T(Str id);              // 当前语言
+const wchar_t* T(Str id, Lang lang);   // 指定语言
+std::wstring Tf(Str fmt, ...);         // 带参数（按当前语言取格式串）
 
 }  // namespace ul

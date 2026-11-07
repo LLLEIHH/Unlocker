@@ -1,6 +1,7 @@
 # ---------------------------------------------------------------- 构建产物
 # CMake / MSBuild 中间件与输出目录，全部可再生
 /build/
+/build-single/
 /build.bak-lei-cache/
 /winui/build-winui/
 /winui/build-winui.bak-lei/

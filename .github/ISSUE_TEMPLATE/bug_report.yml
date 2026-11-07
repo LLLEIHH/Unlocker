@@ -44,7 +44,7 @@ body:
     attributes:
       label: 版本
       description: Release 标签，或 `Unlocker.exe --version` 的输出
-      placeholder: v0.8.0 / Unlocker v0.8 (x64, protocol v3)
+      placeholder: v0.9 / Unlocker v0.9 (x64, protocol v3)
     validations:
       required: true
 

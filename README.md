@@ -13,19 +13,33 @@
 ![Unlocker 界面](docs/screenshot-zh.png)
 
 <details>
-<summary>英文界面</summary>
+<summary>深色模式 / 英文 / 繁体中文</summary>
+
+![深色模式](docs/screenshot-dark.png)
 
 ![English UI](docs/screenshot-en.png)
+
+![繁體中文（台灣）](docs/screenshot-zh-tw.png)
+
+</details>
+
+<details>
+<summary>设置窗口 / 右键菜单</summary>
+
+![设置窗口](docs/screenshot-settings.png)
+
+![右键菜单](docs/screenshot-menu.png)
 
 </details>
 
 ## 下载
 
-到 [Releases](../../releases/latest) 下载 **`Unlocker-Portable.exe`**（约 28 MB），双击即用：
+到 [Releases](../../releases/latest) 下载 **`Unlocker-Single.exe`**（约 730 KB），双击即用：
 
-- **单文件**，不需要安装，不需要 VC++ 运行库
-- 首次运行自动解压到 `%LOCALAPPDATA%\Unlocker\App\<哈希>\`，之后直接复用
-- 想彻底卸载：删掉这个 exe 和上面那个目录即可，不写注册表（只存窗口位置和语言）
+- **单文件**：静态链接 CRT，只依赖系统 DLL，不需要 VC++ 运行库
+- **不需要安装**：拷到任何 Windows 10 / 11 x64 机器上都能直接跑，不写 `%LOCALAPPDATA%`
+- **卸载**：删掉 exe 即可。注册表只动 `HKCU\Software\Unlocker`（语言 / 外观 / 右键菜单开关 / 窗口位置）
+- 想保留右键菜单就别频繁挪 exe；挪过之后运行一次会自动修正注册表里的路径
 
 ## 能做什么
 
@@ -36,7 +50,9 @@
 | 分级解锁 | L0 直接删 → L1 关句柄 → L2 结束进程 → L4 重启后删除，能低级别解决就绝不动用高级别 |
 | 安全操作 | 解锁后删除 / 改名 / 移动 / 复制，支持批量与递归目录 |
 | 黑名单兜底 | 系统关键路径、页面文件、注册表配置单元等**内置规则表**直接拒绝，`--force` 也绕不过 |
-| 中英双语 | 系统是中文（含港澳台）默认简中，否则英文；右上角 ZH/EN 随时切换 |
+| 多语言 | 简体中文 / 繁体（台湾、香港、澳门）/ 英文，按各地用语区分；系统是中文（含港澳台）默认简中，否则英文，设置里随时切换 |
+| 深浅色 | 跟随系统 / 浅色 / 深色三档，立即生效并记住选择 |
+| 右键菜单 | 右键文件、文件夹或文件夹空白处出现「Unlocker 解锁占用」，直达界面并自动扫描 |
 | 深扫 | 普通权限看不到服务与受保护进程的占用，需要时再单独提权扫一遍 |
 
 ## 安全模型（先说清楚，别踩坑）
@@ -44,47 +60,52 @@
 - **不加载驱动**：全部通过公开 Win32/NTAPI 完成，所以做不到"解锁一切"，比如被文件系统过滤驱动锁住的情况只能如实告诉你
 - **最小权限**：GUI 以普通权限启动（拖放和右键菜单才正常），只有真正写盘或深扫时才弹 UAC 拉起一个 worker
 - **黑名单不可关闭**：规则表带 CRC 自检，校验不过就直接进入 fail-closed（全表拒绝），宁可不干活也不误删
-- **单文件版的残余风险**：程序解压到用户可写的 `%LOCALAPPDATA%`，启动前会全量校验文件哈希，但同用户进程理论上仍能在校验后、提权前替换文件（TOCTOU）。这是"便携"换来的代价，正规安装到 `Program Files` 则没有这个问题
+- **单文件版不含自解压**：静态 CRT 链接，exe 原地运行，不会把任何文件释放到用户可写目录；提权 worker 与 UI 是同一个 exe 的两个身份（`--worker`），靠命名管道 + 三重身份校验通信
 
-## 两种构建形态
+## 交付形态
 
 | 形态 | 产物 | 说明 |
 | --- | --- | --- |
-| **WinUI 3**（当前交付 UI） | `Unlocker.exe` + 189 个文件 | 亚克力背景、原生标题栏、跟随系统深浅色；**WinUI 3 的 C++ 没有单文件模式**，所以另外打了单文件版 |
-| **单文件版** | `Unlocker-Portable.exe`（28 MB） | 自解压引导器，把上面那堆压成 27.5 MB 塞进资源里，首次运行释放 |
-| Win32（legacy） | `Unlocker.exe`（466 KB） | 最早的 Win32 界面，功能齐全但停止演进，保留给需要极小体积的场景 |
+| **单文件版（默认交付）** | `Unlocker-Single.exe`（约 730 KB） | Win32 前端 + 静态 CRT，单 exe，不需要运行库、不需要解压 |
+| 常规构建 | `Unlocker.exe`（约 500 KB） | 动态链接 CRT，体积更小，机器上需有 VC++ 运行库 |
+| 可选组件 | `UnlockerShell.dll` | 早期 COM 右键扩展；右键菜单已改为注册表 verb，**这个 DLL 不再需要**，仅为清理旧安装保留 |
+
+> **WinUI 3 前端（`winui/`）已冻结**：不再构建、不再修复，代码与踩坑记录保留在仓库里作参考。
 
 ## 从源码构建
 
-需要 **VS 2022**（Community 即可，含 C++ 工作负载）、**CMake ≥ 3.20**、**Windows SDK 10.0.26100**、Python 3。
-
-WinUI 版第一次构建会自动下载 `nuget.exe` 并还原 4 个包（约 430 MB），需要联网；
-离线环境请自行把 `nuget.exe` 放到 `tools/nuget/` 目录下（跳过下载的分支见 `build.cmd`）。
+需要 **VS 2022**（Community 或 BuildTools，含 C++ 工作负载）、**CMake ≥ 3.20**、**Windows SDK 10.0.26100**、Python 3。
 
 ```bat
-build.cmd            :: Win32 版 + 单元测试，产物在 build\Release\
-build.cmd winui      :: WinUI 3 版，产物在 winui\build-winui\x64\Release\
+build.cmd            :: 常规构建（动态 CRT）+ 单元测试，产物在 build\Release\
+build.cmd single     :: 单文件版（静态 CRT），产物在 build-single\Release\
 ```
-
-单文件版由 CMake 自动打包（`tools/make_bundle.py`），构建完在 `build\Release\Unlocker-Portable.exe`。
 
 跑测试：
 
 ```bat
+cd build && ctest -C Release        :: 三套一起跑
+
 build\Release\policy_tests.exe     :: 黑名单裁决、分级、三次确认
 build\Release\ipc_tests.exe        :: 管道协议、身份校验、超长帧
+build\Release\subtree_tests.exe    :: 目录子树占用、解锁后改名
 ```
 
 ## 目录结构
 
 ```
 src/core/      句柄扫描、占用判定、分级拆锁、文件操作、黑名单裁决（无 UI 无 IPC 依赖）
+src/common/    字符串 / 路径 / 日志 / 错误映射；多语言表（Lang.h + LangTable.cpp）
 src/ipc/       命名管道 + 提权 worker（三重身份校验）
-src/bundle/    单文件版引导器（自解压 + 完整性校验）
-winui/         WinUI 3 前端（唯一在演进 UI）
-src/ui/        Win32 版前端（legacy，已冻结）
-tools/         规则表 CRC 生成、图标生成、载荷打包、产物校验、开发期截图脚本
-docs/          截图与文档
+src/ui/        Win32 前端：Theme 层、自绘控件、主窗口、设置窗口
+src/shell/     右键菜单注册（HKCU 注册表 verb）+ 旧 COM 扩展
+src/cli/       命令行入口（--list / /u / /d / /r / /m / /c）
+src/bundle/    历史：WinUI 时代的自解压引导器（已随 WinUI 冻结）
+winui/         WinUI 3 前端（已冻结，仅存档）
+tools/         规则表 CRC、图标生成、语言表生成、产物校验、开发期截图脚本
+tests/         policy / ipc / subtree 三套回归
+docs/          截图
+notes/         内部施工笔记（不入库）
 ```
 
 ## 贡献
@@ -115,7 +136,9 @@ docs/          截图与文档
 | 重启兜底（F8） | 完成 | `src/core/RebootScheduler.cpp` |
 | 提权 worker + 命名管道 + 三重身份校验 + 重校验 + 空闲退出（F18/F20） | 完成 | `src/ipc/*` |
 | GUI：拖入 / 选择器 / 两级列表 / 深浅扫 / 提权自查（F16/F17/F20） | 完成 | `src/ui/*` |
-| 右键菜单扩展（F9） | 完成（x64） | `src/shell/ContextMenu.cpp` |
+| 自绘界面：标题栏 / 按钮 / 卡片列表 / 深浅色 / 高 DPI | 完成 | `src/ui/Theme.cpp` + `MainWindow.cpp` |
+| 多语言（5 种，按地区用语区分） | 完成 | `src/common/LangTable.cpp`（由 `tools/gen_lang.py` 生成） |
+| 右键菜单（F9） | 完成（注册表 verb，无需管理员/DLL） | `src/shell/ShellIntegration.cpp` |
 | CLI（F10，退出码 0-8） | 完成 | `src/cli/CliMain.cpp` |
 | 造锁工具 | 完成 | `tools/MakeLock` |
 | Level 3（卸 DLL 映像） | 未实现（P2，方案里也是可选） | — |
@@ -136,7 +159,8 @@ cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DPython3_EXECUTABLE=<pyth
 cmake --build build --config Release
 ```
 
-产物在 `build\Release\`：`Unlocker.exe`、`UnlockerShell.dll`、`MakeLock.exe`、`policy_tests.exe`、`ipc_tests.exe`。
+产物在 `build\Release\`：`Unlocker.exe`、`UnlockerShell.dll`、`MakeLock.exe`、`policy_tests.exe`、`ipc_tests.exe`、`subtree_tests.exe`。
+单文件版用 `build.cmd single`，产物在 `build-single\Release\Unlocker.exe`。
 
 **本机踩到的坑（必须知道）**：环境里同时存在 `HTTP_PROXY` 与 `http_proxy`（大小写重复键）时，
 MSBuild 的 ClCompile 任务会抛 `MSB6001 ... 关键字 HTTPS_PROXY / https_proxy`，表现为
@@ -175,11 +199,15 @@ Unlocker.exe /c 目标目录 <路径...>       解锁并复制
 
 ### 右键菜单
 
+首次启动会问一次要不要添加，之后在「设置 → 资源管理器右键菜单」里随时开关。
+
 ```
-Unlocker.exe --install      （管理员）
-Unlocker.exe --uninstall
+Unlocker.exe --install      添加（当前用户，无需管理员）
+Unlocker.exe --uninstall    移除（顺带清掉旧版 COM 扩展的残留）
 ```
 
+实现是 HKCU 下的三个注册表 verb（`*` / `Directory` / `Directory\Background`），
+不加载 DLL、不需要管理员，单文件版也能用；菜单文字随界面语言在安装时写入。
 Win11 新菜单里只会在「显示更多选项」中出现；不放 MSIX 包这是必然行为，不是 bug。
 
 ## 四、安全设计落点（与方案逐条对应）
@@ -202,6 +230,7 @@ Win11 新菜单里只会在「显示更多选项」中出现；不放 MSIX 包�
 ```
 build\Release\policy_tests.exe    26 项全绿（T17-T24 + PREFIX 边界 + COUNT + 三段式提示）
 build\Release\ipc_tests.exe       10 项全绿（SACL 建管道 / hello / ping / scan / 重校验 / 畸形帧 / 版本错位）
+build\Release\subtree_tests.exe    3 项全绿（子树占用扫描 / 原始 MoveFile 必失败 / FileOps::Rename 成功）
 ```
 
 手工验证过：
@@ -218,7 +247,11 @@ Unlocker.exe --worker                     # -> 退出码 2，无任何行为
 **仍需在真机上人工点一遍**（自动化无法批准 UAC）：T32（取消 UAC）、T33（会话复用只弹一次）、
 T34（空闲 5 分钟自退）、T48（手动提权后拖放仍有横幅提示）、T52（标准用户输入管理员凭据跨用户提权）。
 
-## 六、WinUI 3 版本（已能启动并跑通主流程）
+## 六、WinUI 3 版本（已冻结，仅作存档）
+
+> 2026-11 起 WinUI 3 前端不再维护：`build.cmd winui`、`src/bundle` 的自解压载荷与 CI 里的相关
+> 步骤都已停用，交付改为上文的 Win32 单文件版。下面的内容保留，供以后想复活这条线时参考 ——
+> 坑都是真踩过的。
 
 `winui/` 下是 WinUI 3（C++/WinRT）版本，设计按三条已确认的决策落地：
 **自绘标题栏（`ExtendsContentIntoTitleBar`）+ 配色跟随系统（ThemeResource / `ActualThemeChanged`）+ 卡片式布局**。
@@ -288,8 +321,8 @@ build.cmd winui
 1. **进程列表右键「结束进程」菜单未做**：协议 op 表是白名单，没有 `kill` 项；终止进程目前只能通过
    「强制模式 + 解锁并删除」这条路径走 `Level 4`，并且会先过黑名单与二次确认。
    要补这个菜单，得先给协议加一个 `kill(pid)` 并在 worker 端做同样的裁决，不是纯 UI 改动。
-2. **未产出 x86 版本**：`UnlockerShell.dll` 需要 32/64 位各一份（注册表分别写 `HKCR\CLSID` 与
-   `HKCR\Wow6432Node\CLSID`）。CMake 已支持 `-A Win32`，但本次只构建了 x64。
+2. **未产出 x86 版本**：x64 单文件版已覆盖 Win10/11 x64，32 位系统不在支持范围。
+   （只有旧的 COM 扩展 `UnlockerShell.dll` 才需要 32/64 各一份；右键菜单改走注册表 verb 后已无此约束。）
 3. **Level 3（卸映像）未实现**，映像占用会如实提示「只能结束进程或重启后删除」。
 4. `HICON` 不参与 IPC（`ProcessInfo` 过不了管道），UI 侧要靠 `fullPath` 自己取图标；当前列表用文字状态，
    图标未接入。
@@ -333,8 +366,8 @@ python tools\make_icon.py --sheet preview.png        :: 三方案对照图
 
 | 前端 | 资源脚本 | 说明 |
 | --- | --- | --- |
-| WinUI 3 | `winui/UnlockerApp.rc` | 图标 + 版本信息；rc.exe 靠 `AdditionalIncludeDirectories` 找 ico |
-| Win32 | `src/ui/Resource.rc` | 同上；ico 路径由 `CMakeLists.txt` 的 `include_directories` 提供 |
+| Win32（当前） | `src/ui/Resource.rc` | 图标 + 版本信息；ico 路径由 `CMakeLists.txt` 的 `include_directories` 提供 |
+| WinUI 3（已冻结） | `winui/UnlockerApp.rc` | 同上；rc.exe 靠 `AdditionalIncludeDirectories` 找 ico |
 
 资源 ID 用数字 `101`（`#define IDI_APPICON 101`），不用字符串名 —— 字符串名虽然也能编译，
 但 shell 取图标是按序号落的，用名字容易出现「资源在、任务栏却没图标」。
@@ -342,50 +375,58 @@ python tools\make_icon.py --sheet preview.png        :: 三方案对照图
 校验方式（不依赖任何额外工具）：`FindResourceW(exe, 101, RT_GROUP_ICON)` 非空，
 或 `ExtractIconExW` 取第 0 个图标能画出来。
 
-## 十、单文件版（Unlocker-Portable.exe）
+## 十、单文件版（Unlocker-Single.exe）
 
-WinUI 3 的 C++ 版本**没有**单文件模式：运行时 DLL、`resources.pri`、`*.xbf` 必须落盘
-（实测 Release 目录 189 项 / 62 MB）。所以单文件版是个**自解压引导器**：
+当前交付的单文件版是 **Win32 前端 + 静态 CRT**：
+
+```bat
+build.cmd single
+```
+
+CMake 用 `UNLOCKER_STATIC_CRT=ON` 在**任何 target 之前**把 `CMAKE_MSVC_RUNTIME_LIBRARY` 设成
+`MultiThreaded`，保证 `unlocker_core` 静态库与 exe 用同一套运行库 —— 混用会 LNK2038 直接失败，
+硬链过去则会在运行时出现两份 CRT 状态。
+
+| 项 | 说明 |
+| --- | --- |
+| 体积 | 约 730 KB（比动态 CRT 版多约 200 KB） |
+| 依赖 | 只有系统 DLL：gdiplus / dwmapi / uxtheme / user32 / gdi32 / comctl32 / shell32 / ole32 / version / bcrypt / advapi32 / kernel32 |
+| 部署 | 单个 exe，不解压、不写 `%LOCALAPPDATA%`、不需要管理员 |
+| 右键菜单 | 可用：装的是 HKCU 注册表 verb，不需要附带 DLL |
+| 命令行 | 完整保留：`--list` / `/u` / `/d` / `/r` / `/m` / `/c` / `--worker` 全在这一个文件里 |
+
+### （历史）自解压引导器
+
+WinUI 3 的 C++ 没有单文件模式：运行时 DLL、`resources.pri`、`*.xbf` 必须落盘（实测 Release
+目录 189 项 / 62 MB）。所以 WinUI 时代另有一个 `Unlocker-Portable.exe` —— 把整个目录压成载荷
+塞进 RCDATA，首次运行释放到用户目录：
 
 ```
-unlocker/Unlocker-Portable.exe          # 29 MB，单文件，拷到哪都能双击
+Unlocker-Portable.exe                   # 29 MB，单文件，拷到哪都能双击
    └─ 内嵌 RCDATA 载荷（27.5 MB）
         └─ 首次运行解压到 %LOCALAPPDATA%\Unlocker\App\<载荷哈希>\
              └─ 启动真正的 Unlocker.exe
 ```
 
+代码在 `src/bundle/`，随 WinUI 冻结已不再构建；`tools/make_bundle.py` 保留着打包脚本。
+当时的实测数据：
+
 | 项 | 说明 |
 | --- | --- |
-| 体积 | 62.1 MB → **27.5 MB**（XPRESS_HUFF，2.26x） |
-| 依赖 | 只有 `Cabinet` / `ADVAPI32` / `KERNEL32` / `USER32` —— **静态 CRT，不需要 VC++ 运行库** |
-| 首次运行 | 解压约 **0.5 秒**（62 MB 解压 + 落盘），之后写 `ready.tag` |
-| 再次运行 | 0.7 秒（其中 ~0.5 秒是启动前的完整性校验，见下） |
-| 完整性校验 | 每次启动重算全部 275 个文件的 FNV-1a 64，与载荷里的记录比对；对不上就重新解压（自愈） |
-| 目录 ACL | 解压目录写**显式 DACL 并断开父目录继承**（只留 当前用户 / SYSTEM / Administrators），父目录被放宽也波及不到 |
-| 升级 | 载荷哈希变了就落到新目录，旧版本自动清理，不会越用越大 |
+| 体积 | 62.1 MB → 27.5 MB（XPRESS_HUFF，2.26x） |
+| 依赖 | 只有 `Cabinet` / `ADVAPI32` / `KERNEL32` / `USER32` —— 静态 CRT，不需要 VC++ 运行库 |
+| 首次运行 | 解压约 0.5 秒（62 MB 解压 + 落盘），之后写 `ready.tag` |
+| 再次运行 | 0.7 秒（其中约 0.5 秒是启动前的完整性校验） |
+| 完整性校验 | 每次启动重算全部 275 个文件的 FNV-1a 64，对不上就重新解压（自愈） |
+| 目录 ACL | 解压目录写显式 DACL 并断开父目录继承 |
+| 升级 | 载荷哈希变了就落到新目录，旧版本自动清理 |
 | 并发 | 命名互斥量 `Local\Unlocker.Bundle.Extract` 串行化解压 |
-| 命令行 | 参数原样转发给内层 exe，退出码原样返回（CLI / `--worker` 都靠这条） |
 
-**为什么不用压缩库**：本机没有 zlib 可链，而 Windows 自带的 CompressAPI 恰好能用。
-坑在于「自己拼压缩流格式」——MSZIP 的块头格式试了三种写法都和系统解压器对不上（都返回 605），
-最后改成**生产和消费都用 CompressAPI**（`tools/make_bundle.py` 压缩、`BundleMain.cpp` 解压），
-格式天然一致。XPRESS_HUFF 对 DLL 约 2.3x，解压 60 MB 只要 0.1 秒。
+**为什么不用压缩库**：本机没有 zlib 可链，Windows 自带的 CompressAPI 恰好能用。坑在于
+「自己拼压缩流格式」—— MSZIP 的块头试了三种写法都和系统解压器对不上（都返回 605），
+最后改成**生产和消费都用 CompressAPI**，格式天然一致。XPRESS_HUFF 对 DLL 约 2.3x。
 
-构建：
-
-```bat
-build.cmd            :: 走 CMake，会自动先跑 tools/make_bundle.py 生成载荷
-```
-
-产物 `build\Release\Unlocker-Portable.exe`。
-
-`make_bundle.py` 打包的是 `winui\build-winui\x64\Release`，所以**每次构建都会重跑打包**
-（`add_custom_target(... ALL)`）—— 用 `add_custom_command(OUTPUT)` 的话「输出已存在」会永久跳过，
-改了 UI 还发旧界面。脚本内部比内容，没变化就不落盘，因此重复构建不会白白重编 29 MB 资源。
-
-### 残余风险（说清楚，不粉饰）
-
-单文件版把 exe 解到 `%LOCALAPPDATA%` —— **用户可写目录**，而程序会从这里拉起需要 UAC 提权的 worker。
-启动前的哈希校验能挡住「文件被改/被截断」，但挡不住同用户进程在校验之后、提权之前替换文件（TOCTOU）。
-真正的边界是「同一个用户本来就完全控制自己的 `%LOCALAPPDATA%`」，任何 ACL 都改不了这一点。
-要彻底消除，只能不把提权目标放在用户可写目录（例如正规安装到 `Program Files` 用固定路径）。
+**这个方案的风险（也是停用的原因之一）**：单文件版把 exe 解到 `%LOCALAPPDATA%` —— 用户可写
+目录，而程序会从这里拉起需要 UAC 提权的 worker。启动前哈希校验能挡住「文件被改 / 被截断」，
+但挡不住同用户进程在校验之后、提权之前替换文件（TOCTOU）。Win32 静态 CRT 版没有这个问题：
+exe 原地运行，不解压到任何可写目录。

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Unlocker VERSION 0.8.0 LANGUAGES CXX)
+project(Unlocker VERSION 0.9 LANGUAGES CXX)
 
 if(NOT MSVC)
     message(FATAL_ERROR "Unlocker 只支持 MSVC（Win32 API / NTAPI）。")
@@ -7,6 +7,12 @@ endif()
 
 option(UNLOCKER_BUILD_APP "构建主程序、右键扩展等完整交付物" ON)
 option(UNLOCKER_BUILD_WINUI "构建 WinUI 3 版本（需先还原 winui/packages）" OFF)
+# 单文件分发：把 MSVC 运行库静态链进产物，成品不依赖 vcruntime140/msvcp140
+# 必须在任何 target 之前设置：unlocker_core 静态库和 exe 必须是同一套 CRT，否则 LNK2038
+option(UNLOCKER_STATIC_CRT "静态链接 MSVC 运行库（单文件分发）" OFF)
+if(UNLOCKER_STATIC_CRT)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -35,6 +41,7 @@ set(UNLOCKER_COMMON_SRC
     src/common/Log.cpp
     src/common/ErrorMap.cpp
     src/common/Lang.cpp
+    src/common/LangTable.cpp
 )
 
 set(UNLOCKER_CORE_SRC
@@ -98,15 +105,20 @@ if(UNLOCKER_BUILD_APP)
     add_executable(Unlocker WIN32
         src/main.cpp
         src/ui/MainWindow.cpp
+        src/ui/Theme.cpp
         src/ui/FilePicker.cpp
         src/ui/ElevationCheck.cpp
         src/ui/UiIpc.cpp
         src/ui/Resource.rc
         src/cli/CliMain.cpp
+        src/shell/ShellIntegration.cpp
         src/app.manifest
     )
-    target_link_libraries(Unlocker PRIVATE unlocker_core)
-    target_compile_definitions(Unlocker PRIVATE UNLOCKER_VERSION_STR=L"0.8.0")
+    # gdiplus：抗锯齿圆角；dwmapi：圆角/深色标题；uxtheme：深色滚动条（序号动态取，失败即降级）
+    # shell32：SHChangeNotify；advapi32：右键菜单的 HKCU 注册表读写
+    target_link_libraries(Unlocker PRIVATE unlocker_core gdiplus dwmapi uxtheme shell32 advapi32)
+    # 版本号只有一个来源：project(Unlocker VERSION ...)，关于框与 CLI 都读这个宏
+    target_compile_definitions(Unlocker PRIVATE UNLOCKER_VERSION_STR=L"${PROJECT_VERSION}")
     set_target_properties(Unlocker PROPERTIES
         OUTPUT_NAME "Unlocker"
         VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"

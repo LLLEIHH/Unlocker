@@ -6,6 +6,7 @@
 #include <cstdio>
 
 #include "common/ErrorMap.h"
+#include "common/Lang.h"
 #include "common/Log.h"
 #include "common/StringUtil.h"
 #include "core/PathResolver.h"
@@ -142,7 +143,7 @@ bool PipeClient::EnsureStarted(std::wstring* err) {
     if (!ShellExecuteExW(&sei)) {
         const DWORD e = GetLastError();
         if (e == ERROR_CANCELLED) {
-            if (err) *err = L"已取消提权，无法执行操作";   // 正常路径，不当异常处理
+            if (err) *err = T(Str::ErrElevationCancelled);   // 正常路径，不当异常处理
         } else {
             if (err) *err = L"无法启动执行组件：" + ErrorWithCode(e);
         }
