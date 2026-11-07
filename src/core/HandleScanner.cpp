@@ -474,12 +474,17 @@ std::vector<HandleOwner> HandleScanner::FindOwners(const std::wstring& path,
                 bool matched = false;
                 std::wstring via;
                 if (nq.Query(dup, &name) && !name.empty()) {
-                    // 句柄名是设备形式（\Device\HarddiskVolume3\...），
-                    // 两条路都要比对：原样一组，转 DOS 一组。
+                    // 句柄名是设备形式（\Device\HarddiskVolume3\...），且保留打开时的拼写
+                    // （可能是 8.3 短名）。依次尝试：展开短名后的 DOS、原样 DOS、原样设备名。
                     const std::wstring dos = PathResolver::DeviceToDos(name);
-                    if (!dos.empty() && match(dos, &via)) {
+                    const std::wstring longDos =
+                        dos.empty() ? std::wstring() : PathResolver::ExpandShortNames(dos);
+                    if (!longDos.empty() && longDos != dos && match(longDos, &via)) {
                         matched = true;
-                        if (!via.empty()) via = dos;   // 子项用 DOS 路径，方便直接展示
+                        if (!via.empty()) via = longDos;
+                    } else if (!dos.empty() && match(dos, &via)) {
+                        matched = true;
+                        if (!via.empty()) via = dos;
                     } else if (match(name, &via)) {
                         matched = true;
                         if (!via.empty()) via = dos.empty() ? name : dos;

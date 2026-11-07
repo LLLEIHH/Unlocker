@@ -138,6 +138,14 @@ std::wstring PathResolver::DosToDevice(const std::wstring& dosPath) {
     return std::wstring(target) + dosPath.substr(2);
 }
 
+std::wstring PathResolver::ExpandShortNames(const std::wstring& path) {
+    if (path.empty() || path.find(L'~') == std::wstring::npos) return path;
+    wchar_t buf[32768]{};
+    const DWORD n = GetLongPathNameW(path.c_str(), buf, static_cast<DWORD>(std::size(buf)));
+    if (n == 0 || n >= std::size(buf)) return path;
+    return std::wstring(buf, n);
+}
+
 std::wstring PathResolver::Normalize(const std::wstring& rawIn) {
     if (rawIn.empty()) return {};
     Init();
@@ -166,6 +174,27 @@ std::wstring PathResolver::Normalize(const std::wstring& rawIn) {
 
 std::wstring PathResolver::Key(const std::wstring& raw) {
     return ToUpper(Normalize(raw));
+}
+
+std::wstring PathResolver::NormalizeKeepSpelling(const std::wstring& rawIn) {
+    if (rawIn.empty()) return {};
+    std::wstring p = rawIn;
+    for (auto& c : p) if (c == L'/') c = L'\\';
+
+    p = StripPrefix(std::move(p));
+
+    if (p.size() >= 2 && p.compare(0, 2, L"\\\\") != 0) {
+        const std::wstring dos = DeviceToDos(p);
+        if (!dos.empty()) p = dos;
+    }
+
+    wchar_t buf[32768]{};
+    const DWORD n = GetFullPathNameW(p.c_str(), static_cast<DWORD>(std::size(buf)), buf, nullptr);
+    if (n > 0 && n < std::size(buf)) p.assign(buf, n);
+    else p = CollapseDots(p);
+
+    p = CollapseDots(p);
+    return NormalizeSeparators(p);   // 刻意不调用 GetLongPathBestEffort
 }
 
 bool PathResolver::PathEqual(const std::wstring& a, const std::wstring& b) {
@@ -310,23 +339,29 @@ std::vector<std::wstring> PathResolver::ComparisonKeys(const std::wstring& path)
     std::wstring norm = Normalize(path);
     push(norm);
 
-    std::wstring dev = DosToDevice(norm);
-    if (!dev.empty()) {
-        push(NormalizeSeparators(dev));
-        push(ToUpper(dev));
-    }
+    // 句柄名保留「打开时使用的拼写」：如果输入里带 8.3 短名（CI 的 %TEMP% 就是
+    // C:\Users\RUNNER~1\...），Normalize 会把它展开成长名，两边就永远对不上。
+    // 所以额外保留原样拼写，并给每种拼写都生成设备形式。
+    std::wstring given = NormalizeKeepSpelling(path);
+    push(given);
 
-    // 输入可能是 8.3 短名（CI 的 %TEMP% 就是 C:\Users\RUNNER~1\...），而句柄名永远是长名。
-    // 必须用展开后的 canon 再生成一份设备形式，否则子树前缀匹配会全部落空。
-    if (!canon.empty() && _wcsicmp(canon.c_str(), norm.c_str()) != 0) {
-        std::wstring devCanon = DosToDevice(canon);
-        if (!devCanon.empty()) push(NormalizeSeparators(devCanon));
-    }
+    auto pushDevice = [&push](const std::wstring& dos) {
+        const std::wstring dev = DosToDevice(dos);
+        if (!dev.empty()) push(NormalizeSeparators(dev));
+    };
 
-    // 8.3 短名：对方可能用短名打开过
+    pushDevice(norm);
+    if (_wcsicmp(given.c_str(), norm.c_str()) != 0) pushDevice(given);
+
+    // 全短名形式：对方可能整条路径都用短名打开
     wchar_t shortBuf[32768]{};
-    DWORD sn = GetShortPathNameW(norm.c_str(), shortBuf, static_cast<DWORD>(std::size(shortBuf)));
-    if (sn > 0 && sn < std::size(shortBuf)) push(std::wstring(shortBuf, sn));
+    const DWORD sn = GetShortPathNameW(norm.c_str(), shortBuf,
+                                       static_cast<DWORD>(std::size(shortBuf)));
+    if (sn > 0 && sn < std::size(shortBuf)) {
+        const std::wstring sp(shortBuf, sn);
+        push(sp);
+        pushDevice(sp);
+    }
 
     return keys;
 }

@@ -19,6 +19,10 @@ public:
     static std::wstring Key(const std::wstring& raw);
     static bool PathEqual(const std::wstring& a, const std::wstring& b);
 
+    // 与 Normalize 相同的文本规整，但**不展开 8.3 短名**。
+    // 句柄名会保留「打开时使用的拼写」，展开短名反而会让两边对不上。
+    static std::wstring NormalizeKeepSpelling(const std::wstring& raw);
+
     // 句柄真身：解开 junction / symlink / 8.3 短名，得到 \\?\ 形式；返回已剥前缀的 DOS 路径。
     static std::wstring CanonicalFromHandle(HANDLE h);
 
@@ -29,6 +33,10 @@ public:
 
     static std::wstring DeviceToDos(const std::wstring& devicePath);
     static std::wstring DosToDevice(const std::wstring& dosPath);
+
+    // 把 8.3 短名展开成长名。纯字符串 API（GetLongPathName），不打开目标，
+    // 所以锁着的文件也能用；展开失败时原样返回。
+    static std::wstring ExpandShortNames(const std::wstring& path);
 
     static std::wstring SelfExePath();
     static std::wstring SelfDir();
