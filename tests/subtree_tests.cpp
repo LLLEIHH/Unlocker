@@ -7,6 +7,8 @@
 // 进程内自锁测不出任何东西。
 #include <windows.h>
 #include <cstdio>
+#include <fcntl.h>
+#include <io.h>
 #include <string>
 #include <vector>
 
@@ -90,6 +92,9 @@ struct LockProc {
 }  // namespace
 
 int wmain() {
+    // CI 的日志是管道，默认宽字符输出按 ANSI 代码页转换，中文会整片变成 '?'
+    _setmode(_fileno(stdout), _O_U8TEXT);
+
     PathResolver::Init();
     HandleScanner::Init(nullptr);
     std::wstring perr;
@@ -140,6 +145,17 @@ int wmain() {
             }
         }
         Check(sawVia, L"占用者标注了命中的子项路径");
+
+        // 1b) 用 8.3 短名再扫一遍：句柄名永远是长名，短名路径必须也能匹配上。
+        //     这条是 CI 上真实翻车过的场景（%TEMP% = C:\Users\RUNNER~1\...）。
+        wchar_t shortBuf[MAX_PATH * 4]{};
+        const DWORD sn = GetShortPathNameW(parent.c_str(), shortBuf,
+                                           static_cast<DWORD>(std::size(shortBuf)));
+        if (sn > 0 && sn < std::size(shortBuf) && _wcsicmp(shortBuf, parent.c_str()) != 0) {
+            FileReport repShort = HandleScanner::Scan(shortBuf, ScanOptions{ false, false });
+            Check(repShort.subtreeLocked, L"8.3 短名路径也能识别子树占用",
+                  std::wstring(L"短名=") + shortBuf);
+        }
 
         // 2) 子项锁着时，父目录改名必须失败（这就是用户看到的「无法重命名」）
         const std::wstring before = parent;

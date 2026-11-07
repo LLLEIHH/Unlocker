@@ -79,8 +79,13 @@ jobs:
             Write-Host "::warning::dumpbin 不在 PATH，跳过依赖检查"
           }
 
-          & dist\Unlocker-Single.exe --version
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # GUI 子系统的 exe 用 & 调用不会等待，拿不到退出码；Start-Process -Wait 才可靠
+          $p = Start-Process -FilePath "dist\Unlocker-Single.exe" -ArgumentList "--version" `
+                             -NoNewWindow -Wait -PassThru
+          if ($p.ExitCode -ne 0) {
+            Write-Host "::error::--version 退出码 $($p.ExitCode)"
+            exit $p.ExitCode
+          }
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4

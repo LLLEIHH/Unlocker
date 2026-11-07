@@ -316,6 +316,13 @@ std::vector<std::wstring> PathResolver::ComparisonKeys(const std::wstring& path)
         push(ToUpper(dev));
     }
 
+    // 输入可能是 8.3 短名（CI 的 %TEMP% 就是 C:\Users\RUNNER~1\...），而句柄名永远是长名。
+    // 必须用展开后的 canon 再生成一份设备形式，否则子树前缀匹配会全部落空。
+    if (!canon.empty() && _wcsicmp(canon.c_str(), norm.c_str()) != 0) {
+        std::wstring devCanon = DosToDevice(canon);
+        if (!devCanon.empty()) push(NormalizeSeparators(devCanon));
+    }
+
     // 8.3 短名：对方可能用短名打开过
     wchar_t shortBuf[32768]{};
     DWORD sn = GetShortPathNameW(norm.c_str(), shortBuf, static_cast<DWORD>(std::size(shortBuf)));
